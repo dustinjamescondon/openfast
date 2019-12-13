@@ -131,6 +131,11 @@ SET Output_Loc=%CURR_LOC%
 %REGISTRY% "%CURR_LOC%\AeroDyn_Driver_Registry.txt" -I %NWTC_Lib_Loc% -I %CURR_LOC%  -O %Output_Loc% -noextrap
 GOTO checkError
 
+:AeroDyn_Interface
+SET CURR_LOC=%AD_LOC%
+SET Output_Loc=%CURR_LOC%
+%REGISTRY% "%CURR_LOC%\AeroDyn_Interface_Registry.txt" -I %NWTC_Lib_Loc% -I %CURR_LOC%  -O %Output_Loc% -noextrap
+
 :AFI
 SET CURR_LOC=%AD_Loc%
 SET Output_Loc=%CURR_LOC%

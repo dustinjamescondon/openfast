@@ -84,6 +84,7 @@ IMPLICIT NONE
     TYPE(AD_BladePropsType) , DIMENSION(:), ALLOCATABLE  :: BladeProps      !< blade property information from blade input files [-]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: TwrElev      !< Elevation at tower node [m]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: TwrDiam      !< Diameter of tower at node [m]
+    LOGICAL  :: IncludeAddedMass      !< Flag that tells us to use added mass. [-]
   END TYPE AD_InitOutputType
 ! =======================
 ! =========  AD_InputFile  =======
@@ -181,6 +182,11 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SigmaCavitCrit      !< critical cavitation number-  inception value (above which cavit will occur) [-]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: SigmaCavit      !< cavitation number at node  [-]
     LOGICAL , DIMENSION(:,:), ALLOCATABLE  :: CavitWarnSet      !< cavitation warning issued  [-]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: FAddedMass      !< The added mass force per unit span acting on  the jth node in the kth blade [N^M]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: AddedMass      !< The added mass (kg) per unit span acting on  the jth node in the kth blade [kg^M]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: TransposeOrient      !< Array for added mass force per unit span acting on  the jth node in the kth blade [N^M]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: FAddedMass_Vec      !< The added mass force per unit span acting on  the jth node in the kth blade [N^M]
+    REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: FAddedMassTwr      !< - [The added mass force per unit span acting on the jth node on the tower]
   END TYPE AD_MiscVarType
 ! =======================
 ! =========  AD_ParameterType  =======
@@ -206,6 +212,8 @@ IMPLICIT NONE
     REAL(ReKi)  :: FluidDepth      !< Submerged hub height [m]
     TYPE(AFI_ParameterType)  :: AFI      !< AirfoilInfo parameters [-]
     TYPE(BEMT_ParameterType)  :: BEMT      !< Parameters for BEMT module [-]
+    LOGICAL  :: IncludeAddedMass      !< Calculate added mass? [flag]
+    REAL(ReKi)  :: CaBlade      !< Added mass coefficient for blade [-]
     INTEGER(IntKi)  :: NumOuts      !< Number of parameters in the output list (number of outputs requested) [-]
     CHARACTER(1024)  :: RootName      !< RootName for writing output files [-]
     TYPE(OutParmType) , DIMENSION(:), ALLOCATABLE  :: OutParam      !< Names and units (and other characteristics) of all requested output parameters [-]
@@ -1486,6 +1494,7 @@ IF (ALLOCATED(SrcInitOutputData%TwrDiam)) THEN
   END IF
     DstInitOutputData%TwrDiam = SrcInitOutputData%TwrDiam
 ENDIF
+    DstInitOutputData%IncludeAddedMass = SrcInitOutputData%IncludeAddedMass
  END SUBROUTINE AD_CopyInitOutput
 
  SUBROUTINE AD_DestroyInitOutput( InitOutputData, ErrStat, ErrMsg )
@@ -1700,6 +1709,7 @@ ENDIF
     Int_BufSz   = Int_BufSz   + 2*1  ! TwrDiam upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%TwrDiam)  ! TwrDiam
   END IF
+      Int_BufSz  = Int_BufSz  + 1  ! IncludeAddedMass
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -2002,6 +2012,8 @@ ENDIF
       IF (SIZE(InData%TwrDiam)>0) ReKiBuf ( Re_Xferred:Re_Xferred+(SIZE(InData%TwrDiam))-1 ) = PACK(InData%TwrDiam,.TRUE.)
       Re_Xferred   = Re_Xferred   + SIZE(InData%TwrDiam)
   END IF
+      IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%IncludeAddedMass , IntKiBuf(1), 1)
+      Int_Xferred   = Int_Xferred   + 1
  END SUBROUTINE AD_PackInitOutput
 
  SUBROUTINE AD_UnPackInitOutput( ReKiBuf, DbKiBuf, IntKiBuf, Outdata, ErrStat, ErrMsg )
@@ -2464,6 +2476,8 @@ ENDIF
       Re_Xferred   = Re_Xferred   + SIZE(OutData%TwrDiam)
     DEALLOCATE(mask1)
   END IF
+      OutData%IncludeAddedMass = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
+      Int_Xferred   = Int_Xferred + 1
  END SUBROUTINE AD_UnPackInitOutput
 
  SUBROUTINE AD_CopyInputFile( SrcInputFileData, DstInputFileData, CtrlCode, ErrStat, ErrMsg )
@@ -4401,6 +4415,80 @@ IF (ALLOCATED(SrcMiscData%CavitWarnSet)) THEN
   END IF
     DstMiscData%CavitWarnSet = SrcMiscData%CavitWarnSet
 ENDIF
+IF (ALLOCATED(SrcMiscData%FAddedMass)) THEN
+  i1_l = LBOUND(SrcMiscData%FAddedMass,1)
+  i1_u = UBOUND(SrcMiscData%FAddedMass,1)
+  i2_l = LBOUND(SrcMiscData%FAddedMass,2)
+  i2_u = UBOUND(SrcMiscData%FAddedMass,2)
+  IF (.NOT. ALLOCATED(DstMiscData%FAddedMass)) THEN 
+    ALLOCATE(DstMiscData%FAddedMass(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%FAddedMass.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstMiscData%FAddedMass = SrcMiscData%FAddedMass
+ENDIF
+IF (ALLOCATED(SrcMiscData%AddedMass)) THEN
+  i1_l = LBOUND(SrcMiscData%AddedMass,1)
+  i1_u = UBOUND(SrcMiscData%AddedMass,1)
+  i2_l = LBOUND(SrcMiscData%AddedMass,2)
+  i2_u = UBOUND(SrcMiscData%AddedMass,2)
+  IF (.NOT. ALLOCATED(DstMiscData%AddedMass)) THEN 
+    ALLOCATE(DstMiscData%AddedMass(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%AddedMass.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstMiscData%AddedMass = SrcMiscData%AddedMass
+ENDIF
+IF (ALLOCATED(SrcMiscData%TransposeOrient)) THEN
+  i1_l = LBOUND(SrcMiscData%TransposeOrient,1)
+  i1_u = UBOUND(SrcMiscData%TransposeOrient,1)
+  i2_l = LBOUND(SrcMiscData%TransposeOrient,2)
+  i2_u = UBOUND(SrcMiscData%TransposeOrient,2)
+  i3_l = LBOUND(SrcMiscData%TransposeOrient,3)
+  i3_u = UBOUND(SrcMiscData%TransposeOrient,3)
+  IF (.NOT. ALLOCATED(DstMiscData%TransposeOrient)) THEN 
+    ALLOCATE(DstMiscData%TransposeOrient(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%TransposeOrient.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstMiscData%TransposeOrient = SrcMiscData%TransposeOrient
+ENDIF
+IF (ALLOCATED(SrcMiscData%FAddedMass_Vec)) THEN
+  i1_l = LBOUND(SrcMiscData%FAddedMass_Vec,1)
+  i1_u = UBOUND(SrcMiscData%FAddedMass_Vec,1)
+  i2_l = LBOUND(SrcMiscData%FAddedMass_Vec,2)
+  i2_u = UBOUND(SrcMiscData%FAddedMass_Vec,2)
+  i3_l = LBOUND(SrcMiscData%FAddedMass_Vec,3)
+  i3_u = UBOUND(SrcMiscData%FAddedMass_Vec,3)
+  IF (.NOT. ALLOCATED(DstMiscData%FAddedMass_Vec)) THEN 
+    ALLOCATE(DstMiscData%FAddedMass_Vec(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%FAddedMass_Vec.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstMiscData%FAddedMass_Vec = SrcMiscData%FAddedMass_Vec
+ENDIF
+IF (ALLOCATED(SrcMiscData%FAddedMassTwr)) THEN
+  i1_l = LBOUND(SrcMiscData%FAddedMassTwr,1)
+  i1_u = UBOUND(SrcMiscData%FAddedMassTwr,1)
+  i2_l = LBOUND(SrcMiscData%FAddedMassTwr,2)
+  i2_u = UBOUND(SrcMiscData%FAddedMassTwr,2)
+  IF (.NOT. ALLOCATED(DstMiscData%FAddedMassTwr)) THEN 
+    ALLOCATE(DstMiscData%FAddedMassTwr(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstMiscData%FAddedMassTwr.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstMiscData%FAddedMassTwr = SrcMiscData%FAddedMassTwr
+ENDIF
  END SUBROUTINE AD_CopyMisc
 
  SUBROUTINE AD_DestroyMisc( MiscData, ErrStat, ErrMsg )
@@ -4465,6 +4553,21 @@ IF (ALLOCATED(MiscData%SigmaCavit)) THEN
 ENDIF
 IF (ALLOCATED(MiscData%CavitWarnSet)) THEN
   DEALLOCATE(MiscData%CavitWarnSet)
+ENDIF
+IF (ALLOCATED(MiscData%FAddedMass)) THEN
+  DEALLOCATE(MiscData%FAddedMass)
+ENDIF
+IF (ALLOCATED(MiscData%AddedMass)) THEN
+  DEALLOCATE(MiscData%AddedMass)
+ENDIF
+IF (ALLOCATED(MiscData%TransposeOrient)) THEN
+  DEALLOCATE(MiscData%TransposeOrient)
+ENDIF
+IF (ALLOCATED(MiscData%FAddedMass_Vec)) THEN
+  DEALLOCATE(MiscData%FAddedMass_Vec)
+ENDIF
+IF (ALLOCATED(MiscData%FAddedMassTwr)) THEN
+  DEALLOCATE(MiscData%FAddedMassTwr)
 ENDIF
  END SUBROUTINE AD_DestroyMisc
 
@@ -4669,6 +4772,31 @@ ENDIF
   IF ( ALLOCATED(InData%CavitWarnSet) ) THEN
     Int_BufSz   = Int_BufSz   + 2*2  ! CavitWarnSet upper/lower bounds for each dimension
       Int_BufSz  = Int_BufSz  + SIZE(InData%CavitWarnSet)  ! CavitWarnSet
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! FAddedMass allocated yes/no
+  IF ( ALLOCATED(InData%FAddedMass) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*2  ! FAddedMass upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%FAddedMass)  ! FAddedMass
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! AddedMass allocated yes/no
+  IF ( ALLOCATED(InData%AddedMass) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*2  ! AddedMass upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%AddedMass)  ! AddedMass
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! TransposeOrient allocated yes/no
+  IF ( ALLOCATED(InData%TransposeOrient) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*3  ! TransposeOrient upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%TransposeOrient)  ! TransposeOrient
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! FAddedMass_Vec allocated yes/no
+  IF ( ALLOCATED(InData%FAddedMass_Vec) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*3  ! FAddedMass_Vec upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%FAddedMass_Vec)  ! FAddedMass_Vec
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! FAddedMassTwr allocated yes/no
+  IF ( ALLOCATED(InData%FAddedMassTwr) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*2  ! FAddedMassTwr upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%FAddedMassTwr)  ! FAddedMassTwr
   END IF
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
@@ -5078,6 +5206,92 @@ ENDIF
 
       IF (SIZE(InData%CavitWarnSet)>0) IntKiBuf ( Int_Xferred:Int_Xferred+SIZE(InData%CavitWarnSet)-1 ) = TRANSFER(PACK( InData%CavitWarnSet ,.TRUE.), IntKiBuf(1), SIZE(InData%CavitWarnSet))
       Int_Xferred   = Int_Xferred   + SIZE(InData%CavitWarnSet)
+  END IF
+  IF ( .NOT. ALLOCATED(InData%FAddedMass) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%FAddedMass,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%FAddedMass,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%FAddedMass,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%FAddedMass,2)
+    Int_Xferred = Int_Xferred + 2
+
+      IF (SIZE(InData%FAddedMass)>0) ReKiBuf ( Re_Xferred:Re_Xferred+(SIZE(InData%FAddedMass))-1 ) = PACK(InData%FAddedMass,.TRUE.)
+      Re_Xferred   = Re_Xferred   + SIZE(InData%FAddedMass)
+  END IF
+  IF ( .NOT. ALLOCATED(InData%AddedMass) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%AddedMass,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%AddedMass,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%AddedMass,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%AddedMass,2)
+    Int_Xferred = Int_Xferred + 2
+
+      IF (SIZE(InData%AddedMass)>0) ReKiBuf ( Re_Xferred:Re_Xferred+(SIZE(InData%AddedMass))-1 ) = PACK(InData%AddedMass,.TRUE.)
+      Re_Xferred   = Re_Xferred   + SIZE(InData%AddedMass)
+  END IF
+  IF ( .NOT. ALLOCATED(InData%TransposeOrient) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%TransposeOrient,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%TransposeOrient,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%TransposeOrient,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%TransposeOrient,2)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%TransposeOrient,3)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%TransposeOrient,3)
+    Int_Xferred = Int_Xferred + 2
+
+      IF (SIZE(InData%TransposeOrient)>0) ReKiBuf ( Re_Xferred:Re_Xferred+(SIZE(InData%TransposeOrient))-1 ) = PACK(InData%TransposeOrient,.TRUE.)
+      Re_Xferred   = Re_Xferred   + SIZE(InData%TransposeOrient)
+  END IF
+  IF ( .NOT. ALLOCATED(InData%FAddedMass_Vec) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%FAddedMass_Vec,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%FAddedMass_Vec,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%FAddedMass_Vec,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%FAddedMass_Vec,2)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%FAddedMass_Vec,3)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%FAddedMass_Vec,3)
+    Int_Xferred = Int_Xferred + 2
+
+      IF (SIZE(InData%FAddedMass_Vec)>0) ReKiBuf ( Re_Xferred:Re_Xferred+(SIZE(InData%FAddedMass_Vec))-1 ) = PACK(InData%FAddedMass_Vec,.TRUE.)
+      Re_Xferred   = Re_Xferred   + SIZE(InData%FAddedMass_Vec)
+  END IF
+  IF ( .NOT. ALLOCATED(InData%FAddedMassTwr) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%FAddedMassTwr,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%FAddedMassTwr,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%FAddedMassTwr,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%FAddedMassTwr,2)
+    Int_Xferred = Int_Xferred + 2
+
+      IF (SIZE(InData%FAddedMassTwr)>0) ReKiBuf ( Re_Xferred:Re_Xferred+(SIZE(InData%FAddedMassTwr))-1 ) = PACK(InData%FAddedMassTwr,.TRUE.)
+      Re_Xferred   = Re_Xferred   + SIZE(InData%FAddedMassTwr)
   END IF
  END SUBROUTINE AD_PackMisc
 
@@ -5722,6 +5936,142 @@ ENDIF
       Int_Xferred   = Int_Xferred   + SIZE(OutData%CavitWarnSet)
     DEALLOCATE(mask2)
   END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! FAddedMass not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%FAddedMass)) DEALLOCATE(OutData%FAddedMass)
+    ALLOCATE(OutData%FAddedMass(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%FAddedMass.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    ALLOCATE(mask2(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating mask2.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    mask2 = .TRUE. 
+      IF (SIZE(OutData%FAddedMass)>0) OutData%FAddedMass = UNPACK(ReKiBuf( Re_Xferred:Re_Xferred+(SIZE(OutData%FAddedMass))-1 ), mask2, 0.0_ReKi )
+      Re_Xferred   = Re_Xferred   + SIZE(OutData%FAddedMass)
+    DEALLOCATE(mask2)
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! AddedMass not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%AddedMass)) DEALLOCATE(OutData%AddedMass)
+    ALLOCATE(OutData%AddedMass(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%AddedMass.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    ALLOCATE(mask2(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating mask2.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    mask2 = .TRUE. 
+      IF (SIZE(OutData%AddedMass)>0) OutData%AddedMass = UNPACK(ReKiBuf( Re_Xferred:Re_Xferred+(SIZE(OutData%AddedMass))-1 ), mask2, 0.0_ReKi )
+      Re_Xferred   = Re_Xferred   + SIZE(OutData%AddedMass)
+    DEALLOCATE(mask2)
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! TransposeOrient not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i3_l = IntKiBuf( Int_Xferred    )
+    i3_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%TransposeOrient)) DEALLOCATE(OutData%TransposeOrient)
+    ALLOCATE(OutData%TransposeOrient(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%TransposeOrient.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    ALLOCATE(mask3(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating mask3.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    mask3 = .TRUE. 
+      IF (SIZE(OutData%TransposeOrient)>0) OutData%TransposeOrient = UNPACK(ReKiBuf( Re_Xferred:Re_Xferred+(SIZE(OutData%TransposeOrient))-1 ), mask3, 0.0_ReKi )
+      Re_Xferred   = Re_Xferred   + SIZE(OutData%TransposeOrient)
+    DEALLOCATE(mask3)
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! FAddedMass_Vec not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i3_l = IntKiBuf( Int_Xferred    )
+    i3_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%FAddedMass_Vec)) DEALLOCATE(OutData%FAddedMass_Vec)
+    ALLOCATE(OutData%FAddedMass_Vec(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%FAddedMass_Vec.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    ALLOCATE(mask3(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating mask3.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    mask3 = .TRUE. 
+      IF (SIZE(OutData%FAddedMass_Vec)>0) OutData%FAddedMass_Vec = UNPACK(ReKiBuf( Re_Xferred:Re_Xferred+(SIZE(OutData%FAddedMass_Vec))-1 ), mask3, 0.0_ReKi )
+      Re_Xferred   = Re_Xferred   + SIZE(OutData%FAddedMass_Vec)
+    DEALLOCATE(mask3)
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! FAddedMassTwr not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%FAddedMassTwr)) DEALLOCATE(OutData%FAddedMassTwr)
+    ALLOCATE(OutData%FAddedMassTwr(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%FAddedMassTwr.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    ALLOCATE(mask2(i1_l:i1_u,i2_l:i2_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating mask2.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    mask2 = .TRUE. 
+      IF (SIZE(OutData%FAddedMassTwr)>0) OutData%FAddedMassTwr = UNPACK(ReKiBuf( Re_Xferred:Re_Xferred+(SIZE(OutData%FAddedMassTwr))-1 ), mask2, 0.0_ReKi )
+      Re_Xferred   = Re_Xferred   + SIZE(OutData%FAddedMassTwr)
+    DEALLOCATE(mask2)
+  END IF
  END SUBROUTINE AD_UnPackMisc
 
  SUBROUTINE AD_CopyParam( SrcParamData, DstParamData, CtrlCode, ErrStat, ErrMsg )
@@ -5787,6 +6137,8 @@ ENDIF
       CALL BEMT_CopyParam( SrcParamData%BEMT, DstParamData%BEMT, CtrlCode, ErrStat2, ErrMsg2 )
          CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg,RoutineName)
          IF (ErrStat>=AbortErrLev) RETURN
+    DstParamData%IncludeAddedMass = SrcParamData%IncludeAddedMass
+    DstParamData%CaBlade = SrcParamData%CaBlade
     DstParamData%NumOuts = SrcParamData%NumOuts
     DstParamData%RootName = SrcParamData%RootName
 IF (ALLOCATED(SrcParamData%OutParam)) THEN
@@ -5966,6 +6318,8 @@ ENDIF
          Int_BufSz = Int_BufSz + SIZE( Int_Buf )
          DEALLOCATE(Int_Buf)
       END IF
+      Int_BufSz  = Int_BufSz  + 1  ! IncludeAddedMass
+      Re_BufSz   = Re_BufSz   + 1  ! CaBlade
       Int_BufSz  = Int_BufSz  + 1  ! NumOuts
       Int_BufSz  = Int_BufSz  + 1*LEN(InData%RootName)  ! RootName
   Int_BufSz   = Int_BufSz   + 1     ! OutParam allocated yes/no
@@ -6149,6 +6503,10 @@ ENDIF
       ELSE
         IntKiBuf( Int_Xferred ) = 0; Int_Xferred = Int_Xferred + 1
       ENDIF
+      IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%IncludeAddedMass , IntKiBuf(1), 1)
+      Int_Xferred   = Int_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%CaBlade
+      Re_Xferred   = Re_Xferred   + 1
       IntKiBuf ( Int_Xferred:Int_Xferred+(1)-1 ) = InData%NumOuts
       Int_Xferred   = Int_Xferred   + 1
         DO I = 1, LEN(InData%RootName)
@@ -6431,6 +6789,10 @@ ENDIF
       IF(ALLOCATED(Re_Buf )) DEALLOCATE(Re_Buf )
       IF(ALLOCATED(Db_Buf )) DEALLOCATE(Db_Buf )
       IF(ALLOCATED(Int_Buf)) DEALLOCATE(Int_Buf)
+      OutData%IncludeAddedMass = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
+      Int_Xferred   = Int_Xferred + 1
+      OutData%CaBlade = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
       OutData%NumOuts = IntKiBuf( Int_Xferred ) 
       Int_Xferred   = Int_Xferred + 1
       DO I = 1, LEN(OutData%RootName)

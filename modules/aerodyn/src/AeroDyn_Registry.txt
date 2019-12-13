@@ -56,6 +56,7 @@ typedef	^	InitOutputType	LOGICAL	IsLoad_u	{:}	-	-	"Flag that tells FAST if the i
 typedef	^	InitOutputType	AD_BladePropsType	BladeProps	{:}	-	-	"blade property information from blade input files"	-
 typedef	^	InitOutputType	ReKi	TwrElev	{:}	-	-	"Elevation at tower node"	m
 typedef	^	InitOutputType	ReKi	TwrDiam	{:}	-	-	"Diameter of tower at node"	m
+typedef	^	InitOutputType	Logical	IncludeAddedMass	-	-	-	"Flag that tells us to use added mass."	-
 
 # ..... Input file data ...........................................................................................................
 
@@ -68,6 +69,7 @@ typedef	^	AD_InputFile	LOGICAL	TwrShadow	-	-	-	"Calculate tower influence on win
 typedef	^	AD_InputFile	LOGICAL	TwrAero	-	-	-	"Calculate tower aerodynamic loads?"	flag
 typedef	^	AD_InputFile	Logical	FrozenWake	-	-	-	"Flag that tells this module it should assume a frozen wake during linearization."	-
 typedef	^	AD_InputFile	Logical	CavitCheck	-	-	-	"Flag that tells us if we want to check for cavitation" -
+#typedef	^	AD_InputFile	Logical	IncludeAddedMass	-	-	-	"Flag that tells us to include the added mass force" -
 typedef	^	AD_InputFile	ReKi	AirDens	-	-	-	"Air density"	kg/m^3
 typedef	^	AD_InputFile	ReKi	KinVisc	-	-	-	"Kinematic air viscosity"	m^2/s
 typedef	^	AD_InputFile	ReKi	Patm 	-	-	-	"Atmospheric pressure" Pa
@@ -108,6 +110,7 @@ typedef	^	AD_InputFile	IntKi	NumOuts	-	-	-	"Number of parameters in the output l
 typedef	^	AD_InputFile	CHARACTER(ChanLen)	OutList	{:}	-	-	"List of user-requested output channels"	-
 typedef	^	AD_InputFile	ReKi	tau1_const	-	-	-	"time constant for DBEMT [used only when WakeMod=2 and DBEMT_Mod=1]"	s
 typedef	^	AD_InputFile	IntKi	DBEMT_Mod	-	-	-	"Type of dynamic BEMT (DBEMT) model {1=constant tau1, 2=time-dependent tau1}"	-
+#typedef	^	AD_InputFile	ReKi	CaBlade	-	-	-	"Added mass coefficient for blade"
 
 # ..... States ....................................................................................................................
 # Define continuous (differentiable) states here:
@@ -145,6 +148,11 @@ typedef	^	MiscVarType	MeshMapType	B_L_2_H_P	{:}	-	-	"mapping data structure to m
 typedef	^	MiscVarType	ReKi	SigmaCavitCrit	{:}{:}	-	-	 "critical cavitation number-  inception value (above which cavit will occur)"   -
 typedef	^	MiscVarType	ReKi	SigmaCavit	{:}{:}	-	-	  "cavitation number at node "   -
 typedef	^	MiscVarType	Logical	CavitWarnSet {:}{:}	-	-	  "cavitation warning issued "   -
+typedef	^	MiscVarType	ReKi	FAddedMass	{:}{:}	-	-	"The added mass force per unit span acting on  the jth node in the kth blade" N^M
+typedef	^	MiscVarType	ReKi	AddedMass	{:}{:}	-	-	"The added mass (kg) per unit span acting on  the jth node in the kth blade" kg^M
+typedef	^	MiscVarType	ReKi	TransposeOrient	{:}{:}{:}	-	-	"Array for added mass force per unit span acting on  the jth node in the kth blade" N^M
+typedef	^	MiscVarType	ReKi	FAddedMass_Vec	{:}{:}{:}	-	-	"The added mass force per unit span acting on  the jth node in the kth blade" N^M
+typedef	^	MiscVarType	ReKi	FAddedMassTwr	{:}{:} -  -	 - 	"The added mass force per unit span acting on the jth node on the tower" N^M
 
 # ..... Parameters ................................................................................................................
 # Define parameters here:
@@ -170,6 +178,9 @@ typedef   ^  ParameterType  ReKi    Pvap      -   -   -  "Vapour pressure" Pa
 typedef   ^  ParameterType  ReKi    FluidDepth -  -   -    "Submerged hub height" m
 typedef	^	ParameterType	AFI_ParameterType	AFI	-	-	-	"AirfoilInfo parameters"
 typedef	^	ParameterType	BEMT_ParameterType	BEMT	-	-	-	"Parameters for BEMT module"
+typedef	^	ParameterType	LOGICAL	IncludeAddedMass	-	-	-	"Calculate added mass?"	flag
+typedef	^	ParameterType	ReKi	CaBlade	-	-	-	"Added mass coefficient for blade"
+
 # parameters for output
 typedef	^	ParameterType	IntKi	NumOuts	-	-	-	"Number of parameters in the output list (number of outputs requested)"	-
 typedef	^	ParameterType	CHARACTER(1024)	RootName	-	-	-	"RootName for writing output files"	-
@@ -198,3 +209,4 @@ typedef	^	OutputType	MeshType	TowerLoad	-	-	-	"loads on the tower"	-
 typedef	^	OutputType	MeshType	BladeLoad	{:}	-	-	"loads on each blade"	-
 # Define outputs that are not on this mesh here:
 typedef	^	OutputType	ReKi	WriteOutput	{:}	-	-	"Data to be written to an output file: see WriteOutputHdr for names of each variable"	"see WriteOutputUnt"
+
