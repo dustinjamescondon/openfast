@@ -21,6 +21,7 @@ if (GENERATE_TYPES)
   generate_f90_types(src/DBEMT_Registry.txt ${CMAKE_CURRENT_LIST_DIR}/src/DBEMT_Types.f90)
   generate_f90_types(src/UnsteadyAero_Registry.txt ${CMAKE_CURRENT_LIST_DIR}/src/UnsteadyAero_Types.f90)
   generate_f90_types(src/AeroDyn_Driver_Registry.txt ${CMAKE_CURRENT_LIST_DIR}/src/AeroDyn_Driver_Types.f90 -noextrap)
+  generate_f90_types(src/AeroDyn_Interface_Registry.txt ${CMAKE_CURRENT_LIST_DIR}/src/AeroDyn_Interface_Types.f90 -noextrap)
 endif()
 
 # AeroDyn lib
@@ -62,7 +63,18 @@ set(UA_DRIVER_SOURCES
 add_executable(unsteadyaero_driver ${UA_DRIVER_SOURCES})
 target_link_libraries(unsteadyaero_driver aerodynlib nwtclibs versioninfolib ${CMAKE_DL_LIBS})
 
-install(TARGETS unsteadyaero_driver aerodyn_driver aerodynlib
+set(AD_INTERFACE_SOURCES
+  src/AeroDyn_Interface.f90
+  src/AeroDyn_Interface_C.f90
+  src/AeroDyn_Interface_Subs.f90
+  src/AeroDyn_Interface_Types.f90
+)
+
+# AeroDyn interface
+add_library(aerodyn_interface ${AD_INTERFACE_SOURCES})
+target_link_libraries(aerodyn_interface aerodynlib)
+
+install(TARGETS unsteadyaero_driver aerodyn_driver aerodynlib aerodyn_interface
   EXPORT "${CMAKE_PROJECT_NAME}Libraries"
   RUNTIME DESTINATION bin
   LIBRARY DESTINATION lib
