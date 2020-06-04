@@ -237,7 +237,8 @@
       do i = 1, nSubSteps
 
          ! Then call UpdateStates with to bring the states from "time" to "time + dt"
-         call AD_UpdateStates(time_ad, DvrData%iADstep, AD%u, AD%InputTime, AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%m, errStat2, errMsg2 )
+         ! @djc: currently using a custom version of UpdateStates that recalculates the orientations and blade node positions rather than interpolating
+         call AD_UpdateStates_Custom(time_ad, DvrData%iADstep, AD%u, AD%InputTime, AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%m, errStat2, errMsg2 )
          call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
 
          ! Update the time to reflect what time the current states represent

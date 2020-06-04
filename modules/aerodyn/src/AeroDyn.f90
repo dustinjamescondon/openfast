@@ -1028,170 +1028,73 @@ subroutine AD_End( u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg )
 
 END SUBROUTINE AD_End
 !----------------------------------------------------------------------------------------------------------------------------------
-    !> Loose coupling routine for solving for constraint states, integrating continuous states, and updating discrete and other states.
-    !! Continuous, constraint, discrete, and other states are updated for t + Interval
-    !! @djc I modified this subroutine to calculate the BladeRootMotion, and BladeMotions based on the interpolated HubMotion orientation.
-    !! I did this because the forces seemed to be thrown off when using interpolated inputs and calculating those things seemed to fix it.
-    subroutine AD_UpdateStates( t, n, u, utimes, p, x, xd, z, OtherState, m, errStat, errMsg )
-    !..................................................................................................................................
+!> Loose coupling routine for solving for constraint states, integrating continuous states, and updating discrete and other states.
+!! Continuous, constraint, discrete, and other states are updated for t + Interval
+subroutine AD_UpdateStates( t, n, u, utimes, p, x, xd, z, OtherState, m, errStat, errMsg )
+!..................................................................................................................................
 
-    real(DbKi),                     intent(in   ) :: t          !< Current simulation time in seconds
-    integer(IntKi),                 intent(in   ) :: n          !< Current simulation time step n = 0,1,...
-    type(AD_InputType),             intent(inout) :: u(:)       !< Inputs at utimes (out only for mesh record-keeping in ExtrapInterp routine)
-    real(DbKi),                     intent(in   ) :: utimes(:)  !< Times associated with u(:), in seconds
-    type(AD_ParameterType),         intent(in   ) :: p          !< Parameters
-    type(AD_ContinuousStateType),   intent(inout) :: x          !< Input: Continuous states at t;
-    !!   Output: Continuous states at t + Interval
-    type(AD_DiscreteStateType),     intent(inout) :: xd         !< Input: Discrete states at t;
-    !!   Output: Discrete states at t  + Interval
-    type(AD_ConstraintStateType),   intent(inout) :: z          !< Input: Constraint states at t;
-    !!   Output: Constraint states at t+dt
-    type(AD_OtherStateType),        intent(inout) :: OtherState !< Input: Other states at t;
-    !!   Output: Other states at t+dt
-    type(AD_MiscVarType),           intent(inout) :: m          !< Misc/optimization variables
-    integer(IntKi),                 intent(  out) :: errStat    !< Error status of the operation
-    character(*),                   intent(  out) :: errMsg     !< Error message if ErrStat /= ErrID_None
+   real(DbKi),                     intent(in   ) :: t          !< Current simulation time in seconds
+   integer(IntKi),                 intent(in   ) :: n          !< Current simulation time step n = 0,1,...
+   type(AD_InputType),             intent(inout) :: u(:)       !< Inputs at utimes (out only for mesh record-keeping in ExtrapInterp routine)
+   real(DbKi),                     intent(in   ) :: utimes(:)  !< Times associated with u(:), in seconds
+   type(AD_ParameterType),         intent(in   ) :: p          !< Parameters
+   type(AD_ContinuousStateType),   intent(inout) :: x          !< Input: Continuous states at t;
+                                                               !!   Output: Continuous states at t + Interval
+   type(AD_DiscreteStateType),     intent(inout) :: xd         !< Input: Discrete states at t;
+                                                               !!   Output: Discrete states at t  + Interval
+   type(AD_ConstraintStateType),   intent(inout) :: z          !< Input: Constraint states at t;
+                                                               !!   Output: Constraint states at t+dt
+   type(AD_OtherStateType),        intent(inout) :: OtherState !< Input: Other states at t;
+                                                               !!   Output: Other states at t+dt
+   type(AD_MiscVarType),           intent(inout) :: m          !< Misc/optimization variables
+   integer(IntKi),                 intent(  out) :: errStat    !< Error status of the operation
+   character(*),                   intent(  out) :: errMsg     !< Error message if ErrStat /= ErrID_None
 
-    ! local variables
-    type(AD_InputType)                           :: uInterp     ! Interpolated/Extrapolated input
-    integer(intKi)                               :: ErrStat2          ! temporary Error status
-    character(ErrMsgLen)                         :: ErrMsg2           ! temporary Error message
-    character(*), parameter                      :: RoutineName = 'AD_UpdateStates'
-    real(ReKi)                                   :: bladePitch_t1, bladePitch_t2, bladePitch_t, bladePitch_tplusdt
-    
-    ErrStat = ErrID_None
-    ErrMsg  = ""
-
-
-    call AD_CopyInput( u(1), uInterp, MESH_NEWCOPY, errStat2, errMsg2)
-    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
-    if (ErrStat >= AbortErrLev) then
-        call Cleanup()
-        return
-    end if
-
-    ! Calculates the blade pitch at each time and then interpolates them to t and t + DT
-    ! Assumes the blade pitch is the same for each blade
-    bladePitch_t1      = CalcBladePitch(u(2)%HubMotion%Orientation(:,:,1), u(2)%BladeRootMotion(1)%Orientation(:,:,1), u(2)%BladeRootMotion(1)%RefOrientation(:,:,1))
-    bladePitch_t2      = CalcBladePitch(u(1)%HubMotion%Orientation(:,:,1), u(1)%BladeRootMotion(1)%Orientation(:,:,1), u(1)%BladeRootMotion(1)%RefOrientation(:,:,1))
-    bladePitch_tplusdt = InterpolatePitch(bladePitch_t1, utimes(2), bladePitch_t2, utimes(1), t + p%DT)
-    bladePitch_t       = InterpolatePitch(bladePitch_t1, utimes(2), bladePitch_t2, utimes(1), t)
-
-    ! set values of m%BEMT_u(2) from inputs interpolated at t+dt:
-    call AD_Input_ExtrapInterp(u,utimes,uInterp,t+p%DT, errStat2, errMsg2)
-    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
-
-    call RecalcMotions(uInterp%HubMotion, uInterp%BladeRootMotion, uInterp%BladeMotion, bladePitch_t)
-    
-    call SetInputs(p, uInterp, m, 2, errStat2, errMsg2)
-    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
-
-    ! set values of m%BEMT_u(1) from inputs (uInterp) interpolated at t:
-    ! I'm doing this second in case we want the other misc vars at t as before, but I don't think it matters
-    call AD_Input_ExtrapInterp(u,utimes,uInterp, t, errStat2, errMsg2)
-    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
-    
-    call RecalcMotions(uInterp%HubMotion, uInterp%BladeRootMotion, uInterp%BladeMotion, bladePitch_tplusdt)
-    
-    call SetInputs(p, uInterp, m, 1, errStat2, errMsg2)
-    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
-
-    ! Call into the BEMT update states    NOTE:  This is a non-standard framework interface!!!!!  GJH
-    call BEMT_UpdateStates(t, n, m%BEMT_u(1), m%BEMT_u(2),  p%BEMT, x%BEMT, xd%BEMT, z%BEMT, OtherState%BEMT, p%AFI%AFInfo, m%BEMT, errStat2, errMsg2)
-    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
-
-    call Cleanup()
-
-    contains
-    function InterpolatePitch(p_1, t_1, p_2, t_2, t) result(p)
-      real(ReKi), intent(in) :: p_1, p_2
-      real(DbKi), intent(in) :: t_1, t_2
-      real(DbKi), intent(in) :: t
-      real(ReKi)             :: p
+   ! local variables
+   type(AD_InputType)                           :: uInterp     ! Interpolated/Extrapolated input
+   integer(intKi)                               :: ErrStat2          ! temporary Error status
+   character(ErrMsgLen)                         :: ErrMsg2           ! temporary Error message
+   character(*), parameter                      :: RoutineName = 'AD_UpdateStates'
       
-      if( EqualRealNos(t_1, t_2) ) then
-         p = p_1
-         return
-      else if( EqualRealNos(t_1,  t) ) then
-         p = p_1
-         return
-      else if ( EqualRealNos(t_2, t) ) then
-         p = p_2
+   ErrStat = ErrID_None
+   ErrMsg  = ""
+     
+
+   call AD_CopyInput( u(1), uInterp, MESH_NEWCOPY, errStat2, errMsg2)
+      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if (ErrStat >= AbortErrLev) then
+         call Cleanup()
          return
       end if
-      
-      p = p_1 + ((t - t_1) * (p_2 - p_1)) / (t_2 - t_1)
-      
-    end function InterpolatePitch
-    
-    function CalcBladePitch(HubOrient, BladeRootOrient, BladeRootRefOrient) result(theta)
-       real(ReKi), dimension(1:3, 1:3), intent(in) :: HubOrient, BladeRootOrient, BladeRootRefOrient
-       real(ReKi), dimension(1:3, 1:3)             :: BladePitchRotMatrix
-       real(ReKi)                                  :: theta
-       
-       BladePitchRotMatrix = matmul(BladeRootOrient, transpose(HubOrient))
-       BladePitchRotMatrix = matmul(BladePitchRotMatrix, transpose(BladeRootRefOrient))
-       
-       theta = asin(BladePitchRotMatrix(1,2))
-    
-    end function CalcBladePitch
-      
-    ! @djc This function just calculates the BladeRootMotion and BladeMotion orientations to overwrite their interpolated 
-    ! versions because they cause the non-axial forces to become slightly off. Might not be worth calling, but keep it around for
-    ! now.
-    subroutine RecalcMotions(hubMotion, bladeRootMotion, bladeMotion, bladePitch)
-       type(MeshType),                    intent(inout) :: hubMotion
-       type(MeshType), dimension(:),      intent(inout) :: bladeRootMotion
-       type(MeshType), dimension(:),   intent(inout) :: bladeMotion
-       REAL(ReKi) ,     intent(in)    :: bladePitch
-       
-       real(DbKi), dimension(1:3, 1:3) :: rotateMat, orientation
-       real(ReKi), dimension(1:3)      :: position, theta
-       integer(intKi) :: k,j, numBlades ! loop counters
-      
-          ! Blade root motions:
 
-       numBlades = size(BladeRootMotion)
-       do k=1, numBlades
-          theta(1) = 0.0_Reki
-          theta(2) = 0.0_ReKi
-          theta(3) = bladePitch
-          orientation = EulerConstruct(theta)
-       
-          BladeRootMotion(k)%Orientation(  :,:,1) = matmul( orientation, BladeRootMotion(k)%RefOrientation( :,:,1) )
-          BladeRootMotion(k)%Orientation(  :,:,1) = matmul( BladeRootMotion(k)%Orientation( :,:,1), HubMotion%Orientation(  :,:,1) )
-       
-       end do !k=numBlades
-       
-       ! Blade motions:
-       do k=1, numBlades
-          rotateMat = transpose( BladeRootMotion(k)%Orientation(  :,:,1) )
-          rotateMat = matmul( rotateMat, BladeRootMotion(k)%RefOrientation(  :,:,1) )
-          orientation = transpose(rotateMat)
-       
-          rotateMat(1,1) = rotateMat(1,1) - 1.0_ReKi
-          rotateMat(2,2) = rotateMat(2,2) - 1.0_ReKi
-          rotateMat(3,3) = rotateMat(3,3) - 1.0_ReKi
-       
-          do j=1,BladeMotion(k)%nnodes
-             position = BladeMotion(k)%Position(:,j)
-             BladeMotion(k)%TranslationDisp(:,j) = matmul( rotateMat, position )
-       
-             BladeMotion(k)%Orientation(  :,:,j) = matmul( BladeMotion(k)%RefOrientation(:,:,j), orientation )
-       
-       
-             position =  BladeMotion(k)%Position(:,j) + BladeMotion(k)%TranslationDisp(:,j) &
-                - HubMotion%Position(:,1) - HubMotion%TranslationDisp(:,1) 
-             !BladeMotion(k)%TranslationVel( :,j) = cross_product( HubMotion%RotationVel(:,1), position ) ! This calculation was throwing off the non-axial forces for some reason...
-          end do !j=nnodes
+      ! set values of m%BEMT_u(2) from inputs interpolated at t+dt:
+   call AD_Input_ExtrapInterp(u,utimes,uInterp,t+p%DT, errStat2, errMsg2)
+      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
 
-        end do !k=numBlades
-   end subroutine RecalcMotions
+   call SetInputs(p, uInterp, m, 2, errStat2, errMsg2)      
+      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      
+      ! set values of m%BEMT_u(1) from inputs (uInterp) interpolated at t:
+      ! I'm doing this second in case we want the other misc vars at t as before, but I don't think it matters      
+   call AD_Input_ExtrapInterp(u,utimes,uInterp, t, errStat2, errMsg2)
+      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+
+   call SetInputs(p, uInterp, m, 1, errStat2, errMsg2)      
+      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+         
+                        
+      ! Call into the BEMT update states    NOTE:  This is a non-standard framework interface!!!!!  GJH
+   call BEMT_UpdateStates(t, n, m%BEMT_u(1), m%BEMT_u(2),  p%BEMT, x%BEMT, xd%BEMT, z%BEMT, OtherState%BEMT, p%AFI%AFInfo, m%BEMT, errStat2, errMsg2)
+      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+         
+           
+   call Cleanup()
    
-    subroutine Cleanup()
-    call AD_DestroyInput( uInterp, errStat2, errMsg2)
-    end subroutine Cleanup
-    end subroutine AD_UpdateStates
+contains
+   subroutine Cleanup()
+      call AD_DestroyInput( uInterp, errStat2, errMsg2)
+   end subroutine Cleanup
+end subroutine AD_UpdateStates
 !----------------------------------------------------------------------------------------------------------------------------------
 !> Routine for computing outputs, used in both loose and tight coupling.
 !! This subroutine is used to compute the output channels (motions and loads) and place them in the WriteOutput() array.
