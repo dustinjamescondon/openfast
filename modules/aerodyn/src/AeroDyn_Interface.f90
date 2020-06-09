@@ -150,9 +150,9 @@
    SUBROUTINE Interface_InitInflows(AD, nBlades, nNodes, bladeNodeInflows)
    type(AeroDyn_Data),                       intent(inout) :: AD
    integer(IntKi),                           intent(in) :: nBlades, nNodes
-   real(ReKi), dimension(3,nNodes,nBlades), intent(in) :: bladeNodeInflows
+   real(R8Ki), dimension(3,nNodes,nBlades), intent(in) :: bladeNodeInflows
 
-   call Init_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflows)
+      call Init_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflows)
 
    END SUBROUTINE Interface_InitInflows
 
@@ -162,7 +162,7 @@
    integer(IntKi),                              intent(in) :: nBlades, nNodes
    real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflows
 
-   call Set_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflows)
+      call Set_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflows)
 
    END SUBROUTINE Interface_SetInflows
 
@@ -326,7 +326,7 @@
 
    type(AeroDyn_Data),        intent(inout) :: AD
    type(Dvr_SimData),         intent(in   ) :: DvrData
-   real(ReKi), dimension(1:*), intent(out)  :: bladeNodePos	!output variable for blade node positions
+   real(R8Ki), dimension(1:*), intent(out)  :: bladeNodePos	!output variable for blade node positions
 
    integer(intKi)		:: j             ! loop counter for nodes
    integer(intKi)		:: k             ! loop counter for blades
