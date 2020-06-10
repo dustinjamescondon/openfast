@@ -501,7 +501,8 @@ subroutine Init_MiscVars(m, p, u, y, errStat, errMsg)
 
 
       ! Local variables
-   integer(intKi)                               :: k
+   integer(intKi)                               :: k ! iterator for number of blades
+   integer(IntKi)                               :: j ! iterator for number of nodes
    integer(intKi)                               :: ErrStat2          ! temporary Error status
    character(ErrMsgLen)                         :: ErrMsg2           ! temporary Error message
    character(*), parameter                      :: RoutineName = 'Init_OtherStates'
@@ -600,6 +601,24 @@ end if
       call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
    call AllocAry( m%FAddedMassTwr, p%NumBlNds, p%NumBlades, 'm%FAddedMassTwr', ErrStat2, ErrMsg2)
       call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+      
+      
+   ! Init the added mass because the added mass coefficient, air density, and chord length are known at this point
+   ! (^ assumes this is called after SetParameters and Init_BEMTmodule )
+   if ( p%IncludeAddedMass) then
+      do k=1,p%NumBlades
+         do j=1,p%NumBlNds
+            
+            ! Calculate the added mass contribution in the flapwise direction for the jth node
+            ! of the kth blade 
+            m%AddedMass(j,k) = p%CaBlade * p%AirDens * (p%BEMT%chord(j,k) **  2) / 4 * pi
+            
+         end do !j=nodes
+      end do !k=blades
+   end if
+   
+      
+      
    !-----------------------------------------------------------------------------------
 
    
@@ -1663,6 +1682,12 @@ subroutine SetOutputsFromBEMT(p, m, y )
          force(1) =  m%BEMT_y%cx(j,k) * q * p%BEMT%chord(j,k)     ! X = normal force per unit length (normal to the plane, not chord) of the jth node in the kth blade
          force(2) = -m%BEMT_y%cy(j,k) * q * p%BEMT%chord(j,k)     ! Y = tangential force per unit length (tangential to the plane, not chord) of the jth node in the kth blade
          moment(3)=  m%BEMT_y%cm(j,k) * q * p%BEMT%chord(j,k)**2  ! M = pitching moment per unit length of the jth node in the kth blade
+         
+         !-----------------------------------------------------
+         ! Calc added mass force here
+         !-----------------------------------------------------
+   
+         !-----------------------------------------------------
          
             ! save these values for possible output later:
          m%X(j,k) = force(1)
