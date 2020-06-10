@@ -97,6 +97,7 @@ IMPLICIT NONE
     LOGICAL  :: TwrAero      !< Calculate tower aerodynamic loads? [flag]
     LOGICAL  :: FrozenWake      !< Flag that tells this module it should assume a frozen wake during linearization. [-]
     LOGICAL  :: CavitCheck      !< Flag that tells us if we want to check for cavitation [-]
+    LOGICAL  :: IncludeAddedMass      !< Flag that tells us to include the added mass force [-]
     REAL(ReKi)  :: AirDens      !< Air density [kg/m^3]
     REAL(ReKi)  :: KinVisc      !< Kinematic air viscosity [m^2/s]
     REAL(ReKi)  :: Patm      !< Atmospheric pressure [Pa]
@@ -137,6 +138,7 @@ IMPLICIT NONE
     CHARACTER(ChanLen) , DIMENSION(:), ALLOCATABLE  :: OutList      !< List of user-requested output channels [-]
     REAL(ReKi)  :: tau1_const      !< time constant for DBEMT [used only when WakeMod=2 and DBEMT_Mod=1] [s]
     INTEGER(IntKi)  :: DBEMT_Mod      !< Type of dynamic BEMT (DBEMT) model {1=constant tau1, 2=time-dependent tau1} [-]
+    REAL(ReKi)  :: CaBlade      !< Added mass coefficient for blade [-]
   END TYPE AD_InputFile
 ! =======================
 ! =========  AD_ContinuousStateType  =======
@@ -2505,6 +2507,7 @@ ENDIF
     DstInputFileData%TwrAero = SrcInputFileData%TwrAero
     DstInputFileData%FrozenWake = SrcInputFileData%FrozenWake
     DstInputFileData%CavitCheck = SrcInputFileData%CavitCheck
+    DstInputFileData%IncludeAddedMass = SrcInputFileData%IncludeAddedMass
     DstInputFileData%AirDens = SrcInputFileData%AirDens
     DstInputFileData%KinVisc = SrcInputFileData%KinVisc
     DstInputFileData%Patm = SrcInputFileData%Patm
@@ -2615,6 +2618,7 @@ IF (ALLOCATED(SrcInputFileData%OutList)) THEN
 ENDIF
     DstInputFileData%tau1_const = SrcInputFileData%tau1_const
     DstInputFileData%DBEMT_Mod = SrcInputFileData%DBEMT_Mod
+    DstInputFileData%CaBlade = SrcInputFileData%CaBlade
  END SUBROUTINE AD_CopyInputFile
 
  SUBROUTINE AD_DestroyInputFile( InputFileData, ErrStat, ErrMsg )
@@ -2692,6 +2696,7 @@ ENDIF
       Int_BufSz  = Int_BufSz  + 1  ! TwrAero
       Int_BufSz  = Int_BufSz  + 1  ! FrozenWake
       Int_BufSz  = Int_BufSz  + 1  ! CavitCheck
+      Int_BufSz  = Int_BufSz  + 1  ! IncludeAddedMass
       Re_BufSz   = Re_BufSz   + 1  ! AirDens
       Re_BufSz   = Re_BufSz   + 1  ! KinVisc
       Re_BufSz   = Re_BufSz   + 1  ! Patm
@@ -2775,6 +2780,7 @@ ENDIF
   END IF
       Re_BufSz   = Re_BufSz   + 1  ! tau1_const
       Int_BufSz  = Int_BufSz  + 1  ! DBEMT_Mod
+      Re_BufSz   = Re_BufSz   + 1  ! CaBlade
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -2817,6 +2823,8 @@ ENDIF
       IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%FrozenWake , IntKiBuf(1), 1)
       Int_Xferred   = Int_Xferred   + 1
       IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%CavitCheck , IntKiBuf(1), 1)
+      Int_Xferred   = Int_Xferred   + 1
+      IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%IncludeAddedMass , IntKiBuf(1), 1)
       Int_Xferred   = Int_Xferred   + 1
       ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%AirDens
       Re_Xferred   = Re_Xferred   + 1
@@ -3000,6 +3008,8 @@ ENDIF
       Re_Xferred   = Re_Xferred   + 1
       IntKiBuf ( Int_Xferred:Int_Xferred+(1)-1 ) = InData%DBEMT_Mod
       Int_Xferred   = Int_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%CaBlade
+      Re_Xferred   = Re_Xferred   + 1
  END SUBROUTINE AD_PackInputFile
 
  SUBROUTINE AD_UnPackInputFile( ReKiBuf, DbKiBuf, IntKiBuf, Outdata, ErrStat, ErrMsg )
@@ -3050,6 +3060,8 @@ ENDIF
       OutData%FrozenWake = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
       Int_Xferred   = Int_Xferred + 1
       OutData%CavitCheck = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
+      Int_Xferred   = Int_Xferred + 1
+      OutData%IncludeAddedMass = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
       Int_Xferred   = Int_Xferred + 1
       OutData%AirDens = ReKiBuf( Re_Xferred )
       Re_Xferred   = Re_Xferred + 1
@@ -3316,6 +3328,8 @@ ENDIF
       Re_Xferred   = Re_Xferred + 1
       OutData%DBEMT_Mod = IntKiBuf( Int_Xferred ) 
       Int_Xferred   = Int_Xferred + 1
+      OutData%CaBlade = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
  END SUBROUTINE AD_UnPackInputFile
 
  SUBROUTINE AD_CopyContState( SrcContStateData, DstContStateData, CtrlCode, ErrStat, ErrMsg )

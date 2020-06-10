@@ -57,6 +57,7 @@ typedef	^	InitOutputType	AD_BladePropsType	BladeProps	{:}	-	-	"blade property in
 typedef	^	InitOutputType	ReKi	TwrElev	{:}	-	-	"Elevation at tower node"	m
 typedef	^	InitOutputType	ReKi	TwrDiam	{:}	-	-	"Diameter of tower at node"	m
 typedef	^	InitOutputType	Logical	IncludeAddedMass	-	-	-	"Flag that tells us to use added mass."	-
+typedef ^   InitOutputType  ReKi	CaBlade		-	-	-	"Added mass coefficient for the blade."	-
 
 # ..... Input file data ...........................................................................................................
 
@@ -69,7 +70,7 @@ typedef	^	AD_InputFile	LOGICAL	TwrShadow	-	-	-	"Calculate tower influence on win
 typedef	^	AD_InputFile	LOGICAL	TwrAero	-	-	-	"Calculate tower aerodynamic loads?"	flag
 typedef	^	AD_InputFile	Logical	FrozenWake	-	-	-	"Flag that tells this module it should assume a frozen wake during linearization."	-
 typedef	^	AD_InputFile	Logical	CavitCheck	-	-	-	"Flag that tells us if we want to check for cavitation" -
-#typedef	^	AD_InputFile	Logical	IncludeAddedMass	-	-	-	"Flag that tells us to include the added mass force" -
+typedef	^	AD_InputFile	Logical	IncludeAddedMass	-	-	-	"Flag that tells us to include the added mass force" -
 typedef	^	AD_InputFile	ReKi	AirDens	-	-	-	"Air density"	kg/m^3
 typedef	^	AD_InputFile	ReKi	KinVisc	-	-	-	"Kinematic air viscosity"	m^2/s
 typedef	^	AD_InputFile	ReKi	Patm 	-	-	-	"Atmospheric pressure" Pa
@@ -111,7 +112,7 @@ typedef	^	AD_InputFile	IntKi	NumOuts	-	-	-	"Number of parameters in the output l
 typedef	^	AD_InputFile	CHARACTER(ChanLen)	OutList	{:}	-	-	"List of user-requested output channels"	-
 typedef	^	AD_InputFile	ReKi	tau1_const	-	-	-	"time constant for DBEMT [used only when WakeMod=2 and DBEMT_Mod=1]"	s
 typedef	^	AD_InputFile	IntKi	DBEMT_Mod	-	-	-	"Type of dynamic BEMT (DBEMT) model {1=constant tau1, 2=time-dependent tau1}"	-
-#typedef	^	AD_InputFile	ReKi	CaBlade	-	-	-	"Added mass coefficient for blade"
+typedef	^	AD_InputFile	ReKi	CaBlade	-	-	-	"Added mass coefficient for blade"
 
 # ..... States ....................................................................................................................
 # Define continuous (differentiable) states here:

@@ -418,6 +418,14 @@ subroutine AD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
       end do
    end if
    
+      !--------------------------------------------------------------------------------------------
+      ! @djc: Set the added mass flag and coefficient
+      !--------------------------------------------------------------------------------------------
+   InitOut%IncludeAddedMass = InputFileData%IncludeAddedMass
+   InitOut%CaBlade          = InputFileData%CaBlade
+      !--------------------------------------------------------------------------------------------
+
+   
       !............................................................................................
       ! Initialize Jacobian:
       !............................................................................................
@@ -579,7 +587,21 @@ end if
       m%Y_Twr = 0.0_ReKi
    end if
    
-   
+   !-----------------------------------------------------------------------------------
+   ! @djc Init the added mass misc variables
+   !-----------------------------------------------------------------------------------
+   call AllocAry( m%FAddedMass, p%NumBlNds, p%NumBlades, 'm%FAddedMass', ErrStat2, ErrMsg2)
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   call AllocAry( m%FAddedMass_Vec, 3_IntKi, p%NumBlNds, p%NumBlades, 'm%FAddedMass_Vec', ErrStat2, ErrMsg2)
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   call AllocAry( m%AddedMass, p%NumBlNds, p%NumBlades, 'm%AddedMass', ErrStat2, ErrMsg2)
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   call AllocAry( m%TransposeOrient, 3_IntKi, p%NumBlNds, p%NumBlades, 'm%TransposeOrient', ErrStat2, ErrMsg2)
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   call AllocAry( m%FAddedMassTwr, p%NumBlNds, p%NumBlades, 'm%FAddedMassTwr', ErrStat2, ErrMsg2)
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   !-----------------------------------------------------------------------------------
+
    
 end subroutine Init_MiscVars
 !----------------------------------------------------------------------------------------------------------------------------------   
