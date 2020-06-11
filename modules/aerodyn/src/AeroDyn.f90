@@ -732,6 +732,12 @@ subroutine Init_u( u, p, InputFileData, InitInp, errStat, errMsg )
    
    call AllocAry( u%InflowOnBlade, 3_IntKi, p%NumBlNds, p%numBlades, 'u%InflowOnBlade', ErrStat2, ErrMsg2 )
       call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+      !---------------------------------------------------------------------------------------------------------------
+      ! Added this for added mass because the added mass force calculation requires relative acceleration to the fluid
+      !---------------------------------------------------------------------------------------------------------------
+   call AllocAry( u%InflowAccOnBlade, 3_IntKi, p%NumBlNds, p%NumBlades, 'u%InflowAccOnBlade', ErrStat2, ErrMsg2 )
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+      !---------------------------------------------------------------------------------------------------------------
    call AllocAry( u%InflowOnTower, 3_IntKi, p%NumTwrNds, 'u%InflowOnTower', ErrStat2, ErrMsg2 ) ! could be size zero
       call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
 
@@ -741,6 +747,7 @@ subroutine Init_u( u, p, InputFileData, InitInp, errStat, errMsg )
    if (errStat >= AbortErrLev) return      
       
    u%InflowOnBlade = 0.0_ReKi
+   u%InflowAccOnBlade = 0.0_ReKi
    u%UserProp      = 0.0_ReKi
    
       ! Meshes for motion inputs (ElastoDyn and/or BeamDyn)
@@ -883,6 +890,7 @@ subroutine Init_u( u, p, InputFileData, InitInp, errStat, errMsg )
                           ,Orientation     = .true.                         &
                           ,TranslationDisp = .true.                         &
                           ,TranslationVel  = .true.                         &
+                          ,TranslationAcc  = .true.                         &
                          )
                call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
 
@@ -930,6 +938,7 @@ subroutine Init_u( u, p, InputFileData, InitInp, errStat, errMsg )
          u%BladeMotion(k)%Orientation     = u%BladeMotion(k)%RefOrientation
          u%BladeMotion(k)%TranslationDisp = 0.0_R8Ki
          u%BladeMotion(k)%TranslationVel  = 0.0_ReKi
+         u%BladeMotion(k)%TranslationAcc  = 0.0_ReKi
    
    end do !k=numBlades
    
@@ -1714,11 +1723,13 @@ subroutine ApplyAddedMassForce(u, p, m, y)
    integer(intKi)                          :: j                      ! loop counter for nodes
    integer(intKi)                          :: k                      ! loop counter for blades
    real(ReKi)                              :: Fam_vec(3)             ! Added mass force vector
+   real(ReKi)                              :: rel_acc(3)             ! Relative acceleration of the blade node to the fluid
    
    do k=1,p%NumBlades
       do j=1,p%NumBlNds
+         rel_acc = u%BladeMotion(k)%TranslationAcc(:,j) - u%InflowOnBlade(:,j,k)
             ! (not tested) Added mass force (mass x acceleration) in the blade flapwise direction
-         m%FAddedMass(j,k) = dot_product(u%BladeMotion(k)%TranslationAcc(:,j), u%BladeMotion(k)%orientation(1,:,j)) * m%AddedMass(j,k)
+         m%FAddedMass(j,k) = dot_product(rel_acc, u%BladeMotion(k)%orientation(1,:,j)) * m%AddedMass(j,k)
          
             ! note: because force and moment are 1-d arrays, I'm calculating the transpose of the force output
             !       so that I don't have to take the transpose of orientation         
