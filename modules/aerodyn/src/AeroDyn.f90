@@ -1359,6 +1359,10 @@ subroutine AD_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg )
       call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
                   
    call SetOutputsFromBEMT(p, m, y )
+   
+   if ( p%IncludeAddedMass ) then
+      call ApplyAddedMassForce(u, p, m, y)
+   end if
                           
    if ( p%TwrAero ) then
       call ADTwr_CalcOutput(p, u, m, y, ErrStat2, ErrMsg2 )
@@ -1683,12 +1687,6 @@ subroutine SetOutputsFromBEMT(p, m, y )
          force(2) = -m%BEMT_y%cy(j,k) * q * p%BEMT%chord(j,k)     ! Y = tangential force per unit length (tangential to the plane, not chord) of the jth node in the kth blade
          moment(3)=  m%BEMT_y%cm(j,k) * q * p%BEMT%chord(j,k)**2  ! M = pitching moment per unit length of the jth node in the kth blade
          
-         !-----------------------------------------------------
-         ! Calc added mass force here
-         !-----------------------------------------------------
-   
-         !-----------------------------------------------------
-         
             ! save these values for possible output later:
          m%X(j,k) = force(1)
          m%Y(j,k) = force(2)
@@ -1704,6 +1702,31 @@ subroutine SetOutputsFromBEMT(p, m, y )
    
    
 end subroutine SetOutputsFromBEMT
+!----------------------------------------------------------------------------------------------------------------------------------
+!> Calculates and applies the added mass force to the blades 
+!..................................................................................................................................
+subroutine ApplyAddedMassForce(u, p, m, y)
+   type(AD_InputType),      intent(in   )  :: u                               !< AD inputs
+   type(AD_ParameterType),  intent(in   )  :: p                               !< AD parameters
+   type(AD_OutputType),     intent(inout)  :: y                               !< AD outputs 
+   type(AD_MiscVarType),    intent(inout)  :: m                               !< Misc/optimization variables
+   
+   integer(intKi)                          :: j                      ! loop counter for nodes
+   integer(intKi)                          :: k                      ! loop counter for blades
+   real(ReKi)                              :: Fam_vec(3)             ! Added mass force vector
+   
+   do k=1,p%NumBlades
+      do j=1,p%NumBlNds
+            ! (not tested) Added mass force (mass x acceleration) in the blade flapwise direction
+         m%FAddedMass(j,k) = dot_product(u%BladeMotion(k)%TranslationAcc(:,j), u%BladeMotion(k)%orientation(1,:,j)) * m%AddedMass(j,k)
+         
+            ! note: because force and moment are 1-d arrays, I'm calculating the transpose of the force output
+            !       so that I don't have to take the transpose of orientation         
+         Fam_vec = matmul([m%FAddedMass(j,k), 0.0_ReKi, 0.0_ReKi], u%BladeMotion(k)%orientation(:,:,j))
+         y%BladeLoad(k)%Force(:,j) = y%BladeLoad(k)%Force(:,j) - Fam_vec
+      end do ! j=nodes
+   end do ! k=blades
+end subroutine ApplyAddedMassForce
 !----------------------------------------------------------------------------------------------------------------------------------
 !> This routine validates the inputs from the AeroDyn input files.
 SUBROUTINE ValidateInputData( InitInp, InputFileData, NumBl, ErrStat, ErrMsg )
