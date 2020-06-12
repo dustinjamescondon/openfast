@@ -33,7 +33,7 @@
    !! and nodes before sending inflows. Therefore, inflows must be set after this via initInflows
    !! once we know the number of nodes and blades.
    subroutine Interface_InitAeroDyn_C(driverFileName,fname_len,useAddedMass,fluidDensity,kinematicFluidVisc,&
-      hubPos,hubOri,hubVel,hubRotVel,bladePitch,nBlades,nNodes,turbineDiameter,instancePtr,&
+      hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,nBlades,nNodes,turbineDiameter,instancePtr,&
       errStat_out, errMsg_out) !BIND(C, NAME="INTERFACE_INITAERODYN")
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_InitAerodyn_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_InitAerodyn_C
@@ -48,7 +48,9 @@
       real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubPos
       real(C_DOUBLE), dimension(1:3,1:3),  intent(in   )  :: hubOri ! The hub's global to local orientation matrix
       real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubVel
+      real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubAcc
       real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubRotVel
+      real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubRotAcc
       real(C_DOUBLE),                      intent(in   )  :: bladePitch
       real(C_DOUBLE),                      intent(  out)  :: turbineDiameter
       integer(C_INT),                      intent(  out)  :: nBlades
@@ -70,8 +72,8 @@
 
       CALL Interface_Init(simIns%AD, simIns%DvrData, &
          simIns%ADInstance_Initialized, driverFileName,useAddedMass, &
-         fluidDensity, kinematicFluidVisc, hubPos,hubOri,hubVel,         &
-         hubRotVel,bladePitch,nBlades, nNodes,turbineDiameter, errStat, errMsg)
+         fluidDensity, kinematicFluidVisc, hubPos,hubOri,hubAcc,hubVel,         &
+         hubRotVel,hubRotAcc,bladePitch,nBlades, nNodes,turbineDiameter, errStat, errMsg)
       
       if ( NeedToAbort(errStat) ) then
          errStat_out = errStat
@@ -85,24 +87,25 @@
 
 
    !---------------------------------------------------------------------------------------------------------------------------------------------------------------
-   SUBROUTINE Interface_InitInflows_C(simInsAddr, nBlades, nNodes, bladeNodeInflows) BIND(C, NAME='INTERFACE_INITINFLOWS')
+   SUBROUTINE Interface_InitInflows_C(simInsAddr, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc) BIND(C, NAME='INTERFACE_INITINFLOWS')
       !DEC$ ATTRIBUTES DLLEXPORT :: Interface_InitInflows_C
       !GCC$ ATTRIBUTES DLLEXPORT :: Interface_InitInflows_C
 
       type(C_PTR), intent(in), value:: simInsAddr
       integer(C_INT), intent(in) :: nBlades, nNodes
-      real(C_DOUBLE), dimension(3,nNodes,nBlades), intent(in) :: bladeNodeInflows
+      real(C_DOUBLE), dimension(3,nNodes,nBlades), intent(in) :: bladeNodeInflowVel
+      real(C_DOUBLE), dimension(3,nNodes,nBlades), intent(in) :: bladeNodeInflowAcc
       type(SimInstance), pointer :: v
       
       call C_F_POINTER(simInsAddr, v)
 
-      call Init_AD_Inflows(v%AD, nBlades, nNodes, bladeNodeInflows)
+      call Init_AD_Inflows(v%AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
 
    END SUBROUTINE Interface_InitInflows_C
    
    
    !---------------------------------------------------------------------------------------------------------------------------------------------------------------
-   SUBROUTINE Interface_SetHubMotion_C(simInsAddr, time, hubPos, hubOri, hubVel, hubRotVel, bladePitch) BIND(C, NAME='INTERFACE_SETHUBMOTION')
+   SUBROUTINE Interface_SetHubMotion_C(simInsAddr, time, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch) BIND(C, NAME='INTERFACE_SETHUBMOTION')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_SetHubMotion_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_SetHubMotion_C
 
@@ -115,18 +118,20 @@
       real(C_DOUBLE), dimension(1:3),     intent(in) :: hubPos
       real(C_DOUBLE), dimension(1:3,1:3), intent(in) :: hubOri
       real(C_DOUBLE), dimension(1:3),     intent(in) :: hubVel
+      real(C_DOUBLE), dimension(1:3),     intent(in) :: hubAcc
       real(C_DOUBLE), dimension(1:3),     intent(in) :: hubRotVel
+      real(C_DOUBLE), dimension(1:3),     intent(in) :: hubRotAcc
       real(C_DOUBLE),                     intent(in) :: bladePitch
 
       call C_F_POINTER(simInsAddr, v)
       
-      call Interface_SetHubMotion(v%AD,v%DvrData,time,hubPos,hubOri,hubVel,hubRotVel,bladePitch)
+      call Interface_SetHubMotion(v%AD,v%DvrData,time,hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
 
    END SUBROUTINE Interface_SetHubMotion_C
    
    !---------------------------------------------------------------------------------------------------------------------------------------------------------------
    !> Sets the hub kinematics for a fake step, which will not affect the main AD states
-   SUBROUTINE Interface_SetHubMotion_Fake_C(simInsAddr, time, hubPos, hubOri, hubVel, hubRotVel, bladePitch) BIND(C, NAME='INTERFACE_SETHUBMOTION_FAKE')
+   SUBROUTINE Interface_SetHubMotion_Fake_C(simInsAddr, time, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch) BIND(C, NAME='INTERFACE_SETHUBMOTION_FAKE')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_SetHubMotion_Fake_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_SetHubMotion_Fake_C
 
@@ -139,7 +144,9 @@
       real(C_DOUBLE), dimension(1:3),     intent(in) :: hubPos
       real(C_DOUBLE), dimension(1:3,1:3), intent(in) :: hubOri
       real(C_DOUBLE), dimension(1:3),     intent(in) :: hubVel
+      real(C_DOUBLE), dimension(1:3),     intent(in) :: hubAcc
       real(C_DOUBLE), dimension(1:3),     intent(in) :: hubRotVel
+      real(C_DOUBLE), dimension(1:3),     intent(in) :: hubRotAcc
       real(C_DOUBLE),                     intent(in) :: bladePitch
       
       integer(IntKi)                             :: ErrStat
@@ -150,13 +157,13 @@
       ! Copy all of our real AD states into the fake one
       call AD_Dvr_CopyAeroDyn_Data(v%AD, v%AD_fake, MESH_NEWCOPY, ErrStat, ErrMsg)
       
-      call Interface_SetHubMotion(v%AD_fake,v%DvrData,time,hubPos,hubOri,hubVel,hubRotVel,bladePitch)
+      call Interface_SetHubMotion(v%AD_fake,v%DvrData,time,hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
 
    END SUBROUTINE Interface_SetHubMotion_Fake_C
    
    !----------------------------------------------------------------------------------
    !> 
-   SUBROUTINE Interface_SetInflows_C(simInsAddr, nBlades, nNodes, bladeNodeInflows) BIND(C, NAME='INTERFACE_SETINFLOWS')
+   SUBROUTINE Interface_SetInflows_C(simInsAddr, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc) BIND(C, NAME='INTERFACE_SETINFLOWS')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_SetInflows_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_SetInflows_C
       use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
@@ -164,19 +171,20 @@
       type(C_PTR),   value,                     intent(in)    :: simInsAddr
       type(SimInstance), pointer                              :: v
       integer(IntKi),                           intent(in)    :: nBlades, nNodes
-      real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflows
+      real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflowVel
+      real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflowAcc
 
       ! Use to reshape the one-dimensional array of the blade node inflows
 
       call C_F_POINTER(simInsAddr, v)
             
-      call Set_AD_Inflows(v%AD, nBlades, nNodes, bladeNodeInflows)
+      call Set_AD_Inflows(v%AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
 
    END SUBROUTINE Interface_SetInflows_C
    
       !----------------------------------------------------------------------------------
    !> 
-   SUBROUTINE Interface_SetInflows_Fake_C(simInsAddr, nBlades, nNodes, bladeNodeInflows) BIND(C, NAME='INTERFACE_SETINFLOWS_FAKE')
+   SUBROUTINE Interface_SetInflows_Fake_C(simInsAddr, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc) BIND(C, NAME='INTERFACE_SETINFLOWS_FAKE')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_SetInflows_Fake_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_SetInflows_Fake_C
       use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
@@ -184,11 +192,12 @@
       type(C_PTR),   value,                     intent(in)    :: simInsAddr
       type(SimInstance), pointer                              :: v
       integer(IntKi),                           intent(in)    :: nBlades, nNodes
-      real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflows
+      real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflowVel
+      real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflowAcc
 
       call C_F_POINTER(simInsAddr, v)
       
-      call Set_AD_Inflows(v%AD_fake, nBlades, nNodes, bladeNodeInflows)
+      call Set_AD_Inflows(v%AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
 
    END SUBROUTINE Interface_SetInflows_Fake_C
 

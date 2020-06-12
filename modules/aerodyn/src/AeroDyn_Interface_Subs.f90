@@ -93,14 +93,16 @@
 
 
    !----------------------------------------------------------------------------------------------------------------------------------
-   subroutine Init_AeroDyn(DvrData, AD, hubPos, hubOri, hubVel, hubRotVel, bladePitch, dt, useAddedMass, errStat, errMsg)
+   subroutine Init_AeroDyn(DvrData, AD, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch, dt, useAddedMass, errStat, errMsg)
 
    type(Dvr_SimData),              intent(inout) :: DvrData       ! Input data for initialization
    type(AeroDyn_Data),             intent(inout) :: AD            ! AeroDyn data
    real(R8Ki), dimension(1:3),     intent(in   ) :: hubPos
    real(R8Ki), dimension(1:3,1:3), intent(in   ) :: hubOri        ! The hub's initial orientation matrix (local to global)
    real(R8Ki), dimension(1:3),     intent(in   ) :: hubVel
+   real(R8Ki), dimension(1:3),     intent(in   ) :: hubAcc
    real(R8Ki), dimension(1:3),     intent(in   ) :: hubRotVel
+   real(R8Ki), dimension(1:3),     intent(in   ) :: hubRotAcc
    real(R8Ki),                     intent(in   ) :: bladePitch
    real(DbKi),                     intent(inout) :: dt
    logical,                        intent(in   ) :: useAddedMass
@@ -190,13 +192,13 @@
    DO j = -numInp, -1
       !extrapOri = hubOri - (hubRotVel * (dt * j) ) ! this won't work with all orientations
       extrapOri(:,:) = ExtrapOrientationFromRotVel(hubOri, hubRotVel, dt * j)
-      call Set_AD_Inputs(dt * j,DvrData,AD,hubPos,extrapOri,hubVel,hubRotVel,bladePitch,errStat2,errMsg2)
+      call Set_AD_Inputs(dt * j,DvrData,AD,hubPos,extrapOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,errStat2,errMsg2)
       call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    END DO
    
    DvrData%iADStep = -1
 
-   ! @djc 
+   ! @djc TODO where should we actually set these?
    AD%p%IncludeAddedMass = useAddedMass
    AD%p%CaBlade = 1.0_ReKi
    
@@ -320,7 +322,7 @@
    !----------------------------------------------------------------------------------------------------------------------------------
    !> this routine returns time=(nt-1) * DvrData%Cases(iCase)%dT, and cycles values in the input array AD%InputTime and AD%u.
    !! it then sets the inputs for nt * DvrData%Cases(iCase)%dT, which are index values 1 in the arrays.
-   subroutine Set_AD_Inputs(time,DvrData,AD,hubPos,hubOri,hubVel,hubRotVel,bladePitch,errStat,errMsg)
+   subroutine Set_AD_Inputs(time,DvrData,AD,hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,errStat,errMsg)
 
    real(DbKi),                         intent(in   ) :: time          ! time of the inputs (changed from timestep number because now using variable timestep)
    type(Dvr_SimData),                  intent(inout) :: DvrData       ! Driver data
@@ -328,7 +330,9 @@
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubPos        ! x,y,z in meters
    real(C_DOUBLE), dimension(1:3,1:3), intent(in   ) :: hubOri        ! the hub's orientation matrix (local to global)
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubVel        ! x,y,z in meters/sec
+   real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubAcc        ! x,y,z in meters/sec^2
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubRotVel     ! axis-angle in global coordinate system, (magnitute in radians/sec)
+   real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubRotAcc     ! axis-angle in global coordinate system, (magnitute in radians/sec^2)
    real(C_DOUBLE),                     intent(in   ) :: bladePitch
    integer(IntKi),                     intent(  out) :: errStat       ! Status of error message
    character(*),                       intent(  out) :: errMsg        ! Error message if ErrStat /= ErrID_None
@@ -344,6 +348,8 @@
 
    real(ReKi)                                  :: theta(3)
    real(ReKi)                                  :: position(3)
+   real(ReKi)                                  :: rotVel_cross_offset(3) ! used in calculating blade node accelerations and velocities
+   real(ReKi)                                  :: rotAcc_cross_offset(3) ! used in calculating blade node accelerations
    real(ReKi)                                  :: orientation(3,3)
    real(ReKi)                                  :: rotateMat(3,3)
    integer(8)                                  :: curIndex
@@ -386,7 +392,8 @@
    end do !j=nnodes
 
    !.................
-   ! Debug stuff
+   ! Debug stuff (Visual studio's debugger doesn't display the values of non-local variables sometimes, but assigning them
+   !              to a local variable allows us to see them)
    vec_hold = AD%u(1)%HubMotion%RotationVel(:,1)
    mat_hold = AD%u(1)%HubMotion%RefOrientation(:,:,1)
    !.................
@@ -408,8 +415,10 @@
  
    ! set the rotational velocity directly from the argument (expected to be global axis-angle rotational vel)
    AD%u(1)%HubMotion%RotationVel(    :,1) = hubRotVel
-   
+   AD%u(1)%HubMotion%RotationAcc(    :,1) = hubRotAcc
+
    AD%u(1)%HubMotion%TranslationVel(:,1) = hubVel
+   AD%u(1)%HubMotion%TranslationAcc(:,1) = hubAcc
 
 
    ! Blade root motions:
@@ -443,7 +452,10 @@
          position =  AD%u(1)%BladeMotion(k)%Position(:,j) + AD%u(1)%BladeMotion(k)%TranslationDisp(:,j) &
             - AD%u(1)%HubMotion%Position(:,1) - AD%u(1)%HubMotion%TranslationDisp(:,1) ! BM%Position will always be from origin, so we don't need to subtract HM%Position
             
-         AD%u(1)%BladeMotion(k)%TranslationVel( :,j) = cross_product( AD%u(1)%HubMotion%RotationVel(:,1), position ) + hubVel ! added hub vel for PDS coupling
+         rotVel_cross_offset = cross_product( AD%u(1)%HubMotion%RotationVel(:,1), position )
+         rotAcc_cross_offset = cross_product( AD%u(1)%HubMotion%RotationAcc(:,1), position )
+         AD%u(1)%BladeMotion(k)%TranslationVel( :,j) = rotVel_cross_offset + hubVel ! add hub vel because hub can a linear velocity
+         AD%u(1)%BladeMotion(k)%TranslationAcc( :,j) = rotAcc_cross_offset + rotVel_cross_offset + hubAcc
 
       end do !j=nnodes
 
@@ -463,17 +475,21 @@
    !! Must be called directly after all calls to Set_AD_Inputs.
    !! Refer to normal Aerodyn_Driver's Set_AD_Inputs to see how I'm trying to keep the end result the same after taking
    !! set inflows out of that subroutine
-   SUBROUTINE Init_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflows)
+   SUBROUTINE Init_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
       type(AeroDyn_Data),                       intent(inout) :: AD
       integer(IntKi),                              intent(in) :: nBlades, nNodes
-      real(R8Ki), dimension(3,nNodes,nBlades), intent(in) :: bladeNodeInflows
+      real(R8Ki), dimension(3,nNodes, nBlades), intent(in) :: bladeNodeInflowVel
+      real(R8Ki), dimension(3,nNodes, nBlades), intent(in) :: bladeNodeInflowAcc
+
 
       integer :: i, j, k
-      do i = 1, numInp
+      do i = 1, numInp ! This is declared globally in AeroDyn
          do k = 1, nBlades
             do j = 1, nNodes  
 
-               AD%u(i)%InflowOnBlade(1:3,j,k) = bladeNodeInflows(1:3,j,k)
+               AD%u(i)%InflowOnBlade(1:3,j,k) = bladeNodeInflowVel(1:3,j,k)
+               AD%u(i)%InflowAccOnBlade(1:3,j,k) = bladeNodeInflowAcc(1:3,j,k)
+
             enddo !j=nnodes
          enddo !k=nblades
       enddo !i=numInp
@@ -486,15 +502,18 @@
    !! So we wait for it to be done, allow PDS to get the number of nodes and blades, allocate inflows accordingly,
    !! get the node positions, and then initialize the inflows using this subroutine
    !! Must be called directly after all calls to Set_AD_Inputs.
-   SUBROUTINE Set_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflows)
+   SUBROUTINE Set_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
       type(AeroDyn_Data),                       intent(inout)  :: AD
       integer(IntKi),                              intent(in)  :: nBlades, nNodes
-      real(ReKi), dimension(3,nNodes, nBlades), intent(in) :: bladeNodeInflows
+      real(ReKi), dimension(3,nNodes, nBlades), intent(in) :: bladeNodeInflowVel
+      real(ReKi), dimension(3,nNodes, nBlades), intent(in) :: bladeNodeInflowAcc
+
       integer(IntKi) :: j, k
 
       do k = 1, nBlades
          do j = 1, nNodes
-            AD%u(1)%InflowOnBlade(1:3,j,k) = bladeNodeInflows(1:3,j,k)
+            AD%u(1)%InflowOnBlade(1:3,j,k) = bladeNodeInflowVel(1:3,j,k)
+            AD%u(1)%InflowAccOnBlade(1:3,j,k) = bladeNodeInflowAcc(1:3,j,k)
          enddo !j=nnodes
       enddo !k=nblades
 

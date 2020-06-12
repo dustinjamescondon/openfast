@@ -809,7 +809,10 @@ subroutine Init_u( u, p, InputFileData, InitInp, errStat, errMsg )
                        ,ErrMess   = ErrMsg2         &
                        ,Orientation     = .true.    &
                        ,TranslationDisp = .true.    &
+                       ,TranslationVel  = .true.    &
+                       ,TranslationAcc  = .true.    &
                        ,RotationVel     = .true.    &
+                       ,RotationAcc     = .true.    &
                       )
             call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
 
@@ -829,7 +832,11 @@ subroutine Init_u( u, p, InputFileData, InitInp, errStat, errMsg )
          
       u%HubMotion%Orientation     = u%HubMotion%RefOrientation
       u%HubMotion%TranslationDisp = 0.0_R8Ki
-      u%HubMotion%RotationVel     = 0.0_ReKi   
+      u%HubMotion%TranslationVel  = 0.0_R8Ki
+      u%HubMotion%TranslationAcc  = 0.0_R8Ki
+      u%HubMotion%RotationVel     = 0.0_ReKi
+      u%HubMotion%RotationAcc     = 0.0_ReKi   
+
       
    
          !................

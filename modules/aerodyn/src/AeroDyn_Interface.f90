@@ -29,7 +29,7 @@
    !-----------------------------------------------------------------------------------------------------------------------------------------------------------
    !>
    SUBROUTINE Interface_Init(AD,DvrData,AD_Initialized,driverFileName,useAddedMass,fluidDensity,kinematicFluidVisc, &
-      hubPos,hubOri,hubVel,hubRotVel,bladePitch,nBlades,nNodes,turbineDiameter,errStat,errMsg)
+      hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,nBlades,nNodes,turbineDiameter,errStat,errMsg)
    type(AeroDyn_Data),                 intent(inout) :: AD
    type(Dvr_SimData),                  intent(inout) :: DvrData
    logical,                            intent(inout) :: AD_Initialized
@@ -40,7 +40,9 @@
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubPos
    real(C_DOUBLE), dimension(1:3,1:3), intent(in   ) :: hubOri ! The hub's global to local orientation matrix
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubVel
+   real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubAcc
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubRotVel
+   real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubRotAcc
    real(C_DOUBLE),                     intent(in   ) :: bladePitch
    real(C_DOUBLE),                     intent(out  ) :: turbineDiameter
    integer(IntKi),                     intent(out  ) :: nBlades ! number of blades
@@ -75,7 +77,7 @@
    ! Initialize AeroDyn
    ! Set the Initialization input data for AeroDyn based on the Driver input file data, and initialize AD
    ! (this also initializes inputs to AD for first time step)
-   call Init_AeroDyn(DvrData,AD,hubPos,hubOri,hubVel,hubRotVel,bladePitch,DvrData%dt,useAddedMass,errStat2, errMsg2)
+   call Init_AeroDyn(DvrData,AD,hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,DvrData%dt,useAddedMass,errStat2, errMsg2)
    CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )   ! update error list if applicable
    if( NeedToAbort(ErrStat) ) then
       return
@@ -124,14 +126,16 @@
    !> Needed to seperate Set_AD_Input from couple subroutine, because this sets the hubstate for the next timestep,
    !! and once we do that, we can get the node positions of that time, which PDS can use to get new inflows, and
    !! finally we can call the coupling subroutine to set the inflows and do the timestep from
-   SUBROUTINE Interface_SetHubMotion(AD, DvrData, time, hubPos, hubOri, hubVel, hubRotVel, bladePitch)
+   SUBROUTINE Interface_SetHubMotion(AD, DvrData, time, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch)
       type(AeroDyn_Data),                 intent(inout) :: AD
       type(Dvr_SimData),                  intent(inout) :: DvrData
       real(C_DOUBLE),                     intent(in)    :: time              ! time of these inputs
       real(C_DOUBLE), dimension(1:3),     intent(in)    :: hubPos            !
       real(C_DOUBLE), dimension(1:3,1:3), intent(in)    :: hubOri            ! The global to local hub orientation matrix
       real(C_DOUBLE), dimension(1:3),     intent(in)    :: hubVel            !
+      real(C_DOUBLE), dimension(1:3),     intent(in)    :: hubAcc            !
       real(C_DOUBLE), dimension(1:3),     intent(in)    :: hubRotVel         !
+      real(C_DOUBLE), dimension(1:3),     intent(in)    :: hubRotAcc         !
       real(C_DOUBLE),                     intent(in)    :: bladePitch        !
 
       ! variables
@@ -141,28 +145,30 @@
 
       dbTime = time
       ! Moves current input information in u(1) to u(2) and then updates u(1) with these hub states.
-      call Set_AD_Inputs(dbTime, DvrData, AD, hubPos, hubOri, hubVel, hubRotVel, bladePitch, errStat, errMsg)
+      call Set_AD_Inputs(dbTime, DvrData, AD, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch, errStat, errMsg)
 
    END SUBROUTINE Interface_SetHubMotion
 
    
    !-------------------------------------------------------------------------------------------
-   SUBROUTINE Interface_InitInflows(AD, nBlades, nNodes, bladeNodeInflows)
+   SUBROUTINE Interface_InitInflows(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
    type(AeroDyn_Data),                       intent(inout) :: AD
    integer(IntKi),                           intent(in) :: nBlades, nNodes
-   real(R8Ki), dimension(3,nNodes,nBlades), intent(in) :: bladeNodeInflows
+   real(R8Ki), dimension(3,nNodes,nBlades), intent(in) :: bladeNodeInflowVel
+   real(R8Ki), dimension(3,nNodes,nBlades), intent(in) :: bladeNodeInflowAcc
 
-      call Init_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflows)
+      call Init_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
 
    END SUBROUTINE Interface_InitInflows
 
    !----------------------------------------------------------------------------------------------
-   SUBROUTINE Interface_SetInflows(AD, nBlades, nNodes, bladeNodeInflows)
+   SUBROUTINE Interface_SetInflows(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
    type(AeroDyn_Data),                       intent(inout) :: AD
    integer(IntKi),                              intent(in) :: nBlades, nNodes
-   real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflows
+   real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflowVel
+   real(ReKi), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflowAcc
 
-      call Set_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflows)
+      call Set_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
 
    END SUBROUTINE Interface_SetInflows
 
