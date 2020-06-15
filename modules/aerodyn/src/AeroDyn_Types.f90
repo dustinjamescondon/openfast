@@ -85,6 +85,7 @@ IMPLICIT NONE
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: TwrElev      !< Elevation at tower node [m]
     REAL(ReKi) , DIMENSION(:), ALLOCATABLE  :: TwrDiam      !< Diameter of tower at node [m]
     LOGICAL  :: IncludeAddedMass      !< Flag that tells us to use added mass. [-]
+    REAL(ReKi)  :: CaBlade      !< Added mass coefficient for the blade. [-]
   END TYPE AD_InitOutputType
 ! =======================
 ! =========  AD_InputFile  =======
@@ -236,6 +237,7 @@ IMPLICIT NONE
     TYPE(MeshType) , DIMENSION(:), ALLOCATABLE  :: BladeRootMotion      !< motion on each blade root [-]
     TYPE(MeshType) , DIMENSION(:), ALLOCATABLE  :: BladeMotion      !< motion on each blade [-]
     REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: InflowOnBlade      !< U,V,W at nodes on each blade (note if we change the requirement that NumNodes is the same for each blade, this will need to change) [m/s]
+    REAL(ReKi) , DIMENSION(:,:,:), ALLOCATABLE  :: InflowAccOnBlade      !< Udot,Vdot,Wdot at nodes on each blade(^) [-]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: InflowOnTower      !< U,V,W at nodes on the tower [m/s]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: UserProp      !< Optional user property for interpolating airfoils (per element per blade) [-]
   END TYPE AD_InputType
@@ -1499,6 +1501,7 @@ IF (ALLOCATED(SrcInitOutputData%TwrDiam)) THEN
     DstInitOutputData%TwrDiam = SrcInitOutputData%TwrDiam
 ENDIF
     DstInitOutputData%IncludeAddedMass = SrcInitOutputData%IncludeAddedMass
+    DstInitOutputData%CaBlade = SrcInitOutputData%CaBlade
  END SUBROUTINE AD_CopyInitOutput
 
  SUBROUTINE AD_DestroyInitOutput( InitOutputData, ErrStat, ErrMsg )
@@ -1714,6 +1717,7 @@ ENDIF
       Re_BufSz   = Re_BufSz   + SIZE(InData%TwrDiam)  ! TwrDiam
   END IF
       Int_BufSz  = Int_BufSz  + 1  ! IncludeAddedMass
+      Re_BufSz   = Re_BufSz   + 1  ! CaBlade
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -2018,6 +2022,8 @@ ENDIF
   END IF
       IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%IncludeAddedMass , IntKiBuf(1), 1)
       Int_Xferred   = Int_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%CaBlade
+      Re_Xferred   = Re_Xferred   + 1
  END SUBROUTINE AD_PackInitOutput
 
  SUBROUTINE AD_UnPackInitOutput( ReKiBuf, DbKiBuf, IntKiBuf, Outdata, ErrStat, ErrMsg )
@@ -2482,6 +2488,8 @@ ENDIF
   END IF
       OutData%IncludeAddedMass = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
       Int_Xferred   = Int_Xferred + 1
+      OutData%CaBlade = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
  END SUBROUTINE AD_UnPackInitOutput
 
  SUBROUTINE AD_CopyInputFile( SrcInputFileData, DstInputFileData, CtrlCode, ErrStat, ErrMsg )
@@ -7080,6 +7088,22 @@ IF (ALLOCATED(SrcInputData%InflowOnBlade)) THEN
   END IF
     DstInputData%InflowOnBlade = SrcInputData%InflowOnBlade
 ENDIF
+IF (ALLOCATED(SrcInputData%InflowAccOnBlade)) THEN
+  i1_l = LBOUND(SrcInputData%InflowAccOnBlade,1)
+  i1_u = UBOUND(SrcInputData%InflowAccOnBlade,1)
+  i2_l = LBOUND(SrcInputData%InflowAccOnBlade,2)
+  i2_u = UBOUND(SrcInputData%InflowAccOnBlade,2)
+  i3_l = LBOUND(SrcInputData%InflowAccOnBlade,3)
+  i3_u = UBOUND(SrcInputData%InflowAccOnBlade,3)
+  IF (.NOT. ALLOCATED(DstInputData%InflowAccOnBlade)) THEN 
+    ALLOCATE(DstInputData%InflowAccOnBlade(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+      CALL SetErrStat(ErrID_Fatal, 'Error allocating DstInputData%InflowAccOnBlade.', ErrStat, ErrMsg,RoutineName)
+      RETURN
+    END IF
+  END IF
+    DstInputData%InflowAccOnBlade = SrcInputData%InflowAccOnBlade
+ENDIF
 IF (ALLOCATED(SrcInputData%InflowOnTower)) THEN
   i1_l = LBOUND(SrcInputData%InflowOnTower,1)
   i1_u = UBOUND(SrcInputData%InflowOnTower,1)
@@ -7135,6 +7159,9 @@ ENDDO
 ENDIF
 IF (ALLOCATED(InputData%InflowOnBlade)) THEN
   DEALLOCATE(InputData%InflowOnBlade)
+ENDIF
+IF (ALLOCATED(InputData%InflowAccOnBlade)) THEN
+  DEALLOCATE(InputData%InflowAccOnBlade)
 ENDIF
 IF (ALLOCATED(InputData%InflowOnTower)) THEN
   DEALLOCATE(InputData%InflowOnTower)
@@ -7264,6 +7291,11 @@ ENDIF
   IF ( ALLOCATED(InData%InflowOnBlade) ) THEN
     Int_BufSz   = Int_BufSz   + 2*3  ! InflowOnBlade upper/lower bounds for each dimension
       Re_BufSz   = Re_BufSz   + SIZE(InData%InflowOnBlade)  ! InflowOnBlade
+  END IF
+  Int_BufSz   = Int_BufSz   + 1     ! InflowAccOnBlade allocated yes/no
+  IF ( ALLOCATED(InData%InflowAccOnBlade) ) THEN
+    Int_BufSz   = Int_BufSz   + 2*3  ! InflowAccOnBlade upper/lower bounds for each dimension
+      Re_BufSz   = Re_BufSz   + SIZE(InData%InflowAccOnBlade)  ! InflowAccOnBlade
   END IF
   Int_BufSz   = Int_BufSz   + 1     ! InflowOnTower allocated yes/no
   IF ( ALLOCATED(InData%InflowOnTower) ) THEN
@@ -7458,6 +7490,25 @@ ENDIF
 
       IF (SIZE(InData%InflowOnBlade)>0) ReKiBuf ( Re_Xferred:Re_Xferred+(SIZE(InData%InflowOnBlade))-1 ) = PACK(InData%InflowOnBlade,.TRUE.)
       Re_Xferred   = Re_Xferred   + SIZE(InData%InflowOnBlade)
+  END IF
+  IF ( .NOT. ALLOCATED(InData%InflowAccOnBlade) ) THEN
+    IntKiBuf( Int_Xferred ) = 0
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    IntKiBuf( Int_Xferred ) = 1
+    Int_Xferred = Int_Xferred + 1
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%InflowAccOnBlade,1)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%InflowAccOnBlade,1)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%InflowAccOnBlade,2)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%InflowAccOnBlade,2)
+    Int_Xferred = Int_Xferred + 2
+    IntKiBuf( Int_Xferred    ) = LBOUND(InData%InflowAccOnBlade,3)
+    IntKiBuf( Int_Xferred + 1) = UBOUND(InData%InflowAccOnBlade,3)
+    Int_Xferred = Int_Xferred + 2
+
+      IF (SIZE(InData%InflowAccOnBlade)>0) ReKiBuf ( Re_Xferred:Re_Xferred+(SIZE(InData%InflowAccOnBlade))-1 ) = PACK(InData%InflowAccOnBlade,.TRUE.)
+      Re_Xferred   = Re_Xferred   + SIZE(InData%InflowAccOnBlade)
   END IF
   IF ( .NOT. ALLOCATED(InData%InflowOnTower) ) THEN
     IntKiBuf( Int_Xferred ) = 0
@@ -7747,6 +7798,35 @@ ENDIF
     mask3 = .TRUE. 
       IF (SIZE(OutData%InflowOnBlade)>0) OutData%InflowOnBlade = UNPACK(ReKiBuf( Re_Xferred:Re_Xferred+(SIZE(OutData%InflowOnBlade))-1 ), mask3, 0.0_ReKi )
       Re_Xferred   = Re_Xferred   + SIZE(OutData%InflowOnBlade)
+    DEALLOCATE(mask3)
+  END IF
+  IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! InflowAccOnBlade not allocated
+    Int_Xferred = Int_Xferred + 1
+  ELSE
+    Int_Xferred = Int_Xferred + 1
+    i1_l = IntKiBuf( Int_Xferred    )
+    i1_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i2_l = IntKiBuf( Int_Xferred    )
+    i2_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    i3_l = IntKiBuf( Int_Xferred    )
+    i3_u = IntKiBuf( Int_Xferred + 1)
+    Int_Xferred = Int_Xferred + 2
+    IF (ALLOCATED(OutData%InflowAccOnBlade)) DEALLOCATE(OutData%InflowAccOnBlade)
+    ALLOCATE(OutData%InflowAccOnBlade(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating OutData%InflowAccOnBlade.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    ALLOCATE(mask3(i1_l:i1_u,i2_l:i2_u,i3_l:i3_u),STAT=ErrStat2)
+    IF (ErrStat2 /= 0) THEN 
+       CALL SetErrStat(ErrID_Fatal, 'Error allocating mask3.', ErrStat, ErrMsg,RoutineName)
+       RETURN
+    END IF
+    mask3 = .TRUE. 
+      IF (SIZE(OutData%InflowAccOnBlade)>0) OutData%InflowAccOnBlade = UNPACK(ReKiBuf( Re_Xferred:Re_Xferred+(SIZE(OutData%InflowAccOnBlade))-1 ), mask3, 0.0_ReKi )
+      Re_Xferred   = Re_Xferred   + SIZE(OutData%InflowAccOnBlade)
     DEALLOCATE(mask3)
   END IF
   IF ( IntKiBuf( Int_Xferred ) == 0 ) THEN  ! InflowOnTower not allocated
@@ -8342,6 +8422,16 @@ IF (ALLOCATED(u_out%InflowOnBlade) .AND. ALLOCATED(u1%InflowOnBlade)) THEN
   DEALLOCATE(b3)
   DEALLOCATE(c3)
 END IF ! check if allocated
+IF (ALLOCATED(u_out%InflowAccOnBlade) .AND. ALLOCATED(u1%InflowAccOnBlade)) THEN
+  ALLOCATE(b3(SIZE(u_out%InflowAccOnBlade,1),SIZE(u_out%InflowAccOnBlade,2), &
+              SIZE(u_out%InflowAccOnBlade,3)                     ))
+  ALLOCATE(c3(SIZE(u_out%InflowAccOnBlade,1),SIZE(u_out%InflowAccOnBlade,2), &
+              SIZE(u_out%InflowAccOnBlade,3)                     ))
+  b3 = -(u1%InflowAccOnBlade - u2%InflowAccOnBlade)/t(2)
+  u_out%InflowAccOnBlade = u1%InflowAccOnBlade + b3 * t_out
+  DEALLOCATE(b3)
+  DEALLOCATE(c3)
+END IF ! check if allocated
 IF (ALLOCATED(u_out%InflowOnTower) .AND. ALLOCATED(u1%InflowOnTower)) THEN
   ALLOCATE(b2(SIZE(u_out%InflowOnTower,1),SIZE(u_out%InflowOnTower,2) ))
   ALLOCATE(c2(SIZE(u_out%InflowOnTower,1),SIZE(u_out%InflowOnTower,2) ))
@@ -8441,6 +8531,17 @@ IF (ALLOCATED(u_out%InflowOnBlade) .AND. ALLOCATED(u1%InflowOnBlade)) THEN
   b3 = (t(3)**2*(u1%InflowOnBlade - u2%InflowOnBlade) + t(2)**2*(-u1%InflowOnBlade + u3%InflowOnBlade))/(t(2)*t(3)*(t(2) - t(3)))
   c3 = ( (t(2)-t(3))*u1%InflowOnBlade + t(3)*u2%InflowOnBlade - t(2)*u3%InflowOnBlade ) / (t(2)*t(3)*(t(2) - t(3)))
   u_out%InflowOnBlade = u1%InflowOnBlade + b3 * t_out + c3 * t_out**2
+  DEALLOCATE(b3)
+  DEALLOCATE(c3)
+END IF ! check if allocated
+IF (ALLOCATED(u_out%InflowAccOnBlade) .AND. ALLOCATED(u1%InflowAccOnBlade)) THEN
+  ALLOCATE(b3(SIZE(u_out%InflowAccOnBlade,1),SIZE(u_out%InflowAccOnBlade,2), &
+              SIZE(u_out%InflowAccOnBlade,3)                     ))
+  ALLOCATE(c3(SIZE(u_out%InflowAccOnBlade,1),SIZE(u_out%InflowAccOnBlade,2), &
+              SIZE(u_out%InflowAccOnBlade,3)                     ))
+  b3 = (t(3)**2*(u1%InflowAccOnBlade - u2%InflowAccOnBlade) + t(2)**2*(-u1%InflowAccOnBlade + u3%InflowAccOnBlade))/(t(2)*t(3)*(t(2) - t(3)))
+  c3 = ( (t(2)-t(3))*u1%InflowAccOnBlade + t(3)*u2%InflowAccOnBlade - t(2)*u3%InflowAccOnBlade ) / (t(2)*t(3)*(t(2) - t(3)))
+  u_out%InflowAccOnBlade = u1%InflowAccOnBlade + b3 * t_out + c3 * t_out**2
   DEALLOCATE(b3)
   DEALLOCATE(c3)
 END IF ! check if allocated

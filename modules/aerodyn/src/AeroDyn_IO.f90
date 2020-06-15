@@ -1752,6 +1752,9 @@ SUBROUTINE Calc_WriteOutput( p, u, m, y, OtherState, indx, ErrStat, ErrMsg )
          m%AllOuts( BNSigCr(   beta,k) ) = m%SigmaCavitCrit(j,k)
          m%AllOuts( BNSgCav(   beta,k) ) = m%SigmaCavit(j,k)
          
+         m%AllOuts( BNAddMa(   beta,k) ) = m%AddedMass(j,k)
+         m%AllOuts( BNFam  (   beta,k) ) = m%FAddedMass(j,k)
+         
          cp=cos(m%BEMT_y%phi(j,k))
          sp=sin(m%BEMT_y%phi(j,k))
          m%AllOuts( BNCl(   beta,k) ) = m%BEMT_y%Cx(j,k)*cp + m%BEMT_y%Cy(j,k)*sp         
