@@ -393,7 +393,13 @@ subroutine AD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
          return
       end if
    
-   
+      !--------------------------------------------------------------------------------------------
+      ! @djc: Set the added mass flag and coefficient
+      !--------------------------------------------------------------------------------------------
+   InitOut%IncludeAddedMass = InputFileData%IncludeAddedMass
+   InitOut%CaBlade          = InputFileData%CaBlade
+      !--------------------------------------------------------------------------------------------
+
       !............................................................................................
       ! Initialize states and misc vars
       !............................................................................................
@@ -417,14 +423,6 @@ subroutine AD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
          if (allocated(p%AFI(i)%Y_Coord)) deallocate( p%AFI(i)%Y_Coord) 
       end do
    end if
-   
-      !--------------------------------------------------------------------------------------------
-      ! @djc: Set the added mass flag and coefficient
-      !--------------------------------------------------------------------------------------------
-   InitOut%IncludeAddedMass = InputFileData%IncludeAddedMass
-   InitOut%CaBlade          = InputFileData%CaBlade
-      !--------------------------------------------------------------------------------------------
-
    
       !............................................................................................
       ! Initialize Jacobian:
