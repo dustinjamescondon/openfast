@@ -32,9 +32,14 @@
    contains
 
    !----------------------------------------------------------------------------------------------------------------------------------
-   subroutine Dvr_Init(inputFile,DvrData,errStat,errMsg )
+   subroutine Interface_Init_Parameters(inputFile,outputfile,timestep,numBlades,hubRad,precone,DvrData,errStat,errMsg )
 
-   CHARACTER(*),              intent(in   ) :: InputFile     ! file name for driver input file (for PDS coupling)
+   CHARACTER(*),              intent(in   ) :: InputFile     ! file name for AeroDyn input file
+   CHARACTER(*),              intent(in   ) :: OutputFile    ! file name for the output of the simulation
+   real(ReKi),                intent(in   ) :: timestep
+   integer(IntKi),            intent(in   ) :: numBlades 
+   real(ReKi),                intent(in   ) :: hubRad
+   real(ReKi),                intent(in   ) :: precone       ! radians
    type(Dvr_SimData),         intent(  out) :: DvrData       ! driver data
    integer(IntKi),            intent(  out) :: errStat       ! Status of error message
    character(*),              intent(  out) :: errMsg        ! Error message if ErrStat /= ErrID_None
@@ -42,11 +47,11 @@
    ! local variables
    integer(IntKi)                              :: errStat2      ! local status of error message
    character(ErrMsgLen)                        :: errMsg2       ! local error message if ErrStat /= ErrID_None
-   character(*), parameter                     :: RoutineName = 'Dvr_Init'
+   character(*), parameter                     :: RoutineName = 'Interface_Init_Parameters'
 
    CHARACTER(200)                              :: git_commit    ! String containing the current git commit hash
 
-   TYPE(ProgDesc), PARAMETER                   :: version   = ProgDesc( 'AeroDyn Driver', '', '' )  ! The version number of this program.
+   TYPE(ProgDesc), PARAMETER                   :: version   = ProgDesc( 'AeroDyn Interface', '', '' )  ! The version number of this program.
 
    ErrStat = ErrID_None
    ErrMsg  = ""
@@ -62,34 +67,22 @@
    ! Tell our users what they're running
    CALL WrScr( ' Running '//GetNVD( version )//' a part of OpenFAST - '//TRIM(git_Commit)//NewLine//' linked with '//TRIM( GetNVD( NWTC_Ver ))//NewLine )
 
-   !IF (LEN_TRIM(InputFile) == 0) THEN ! no input file was specified
-
-   ! @djc commented this out because we aren't setting it from command line, but through a subroutine argument
-   !   call SetErrStat(ErrID_Fatal, 'The required input file was not specified on the command line.', ErrStat, ErrMsg, RoutineName)
-   !bjj:  if people have compiled themselves, they should be able to figure out the file name, right?
-   !   IF (BITS_IN_ADDR==32) THEN
-   !      CALL NWTC_DisplaySyntax( InputFile, 'AeroDyn_Driver_Win32.exe' )
-   !   ELSEIF( BITS_IN_ADDR == 64) THEN
-   !      CALL NWTC_DisplaySyntax( InputFile, 'AeroDyn_Driver_x64.exe' )
-   !   ELSE
-   !      CALL NWTC_DisplaySyntax( InputFile, 'AeroDyn_Driver.exe' )
-   !   END IF
-   !
-   !   ! return
-   !END IF
-
-   ! Read the AeroDyn driver input file
-   Call WrScr('reading input')
-   call Dvr_ReadInputFile(inputFile, DvrData, errStat2, errMsg2 )
-   call SetErrStat(errStat2, errMsg2, ErrStat, ErrMsg, RoutineName)
-   if (errStat >= AbortErrLev) return
-
+   ! set the interface parameters
+   DvrData%dt     = timestep
+   DvrData%hubRad = hubRad
+   DvrData%numBlades = numBlades 
+   DvrData%AD_InputFile = inputFile ! Note: may need to do something special with this
+   DvrData%OutFileData%Root = outputFile ! hard-code for now 
+   DvrData%precone = precone
+   DvrData%OutFileData%delim = TAB ! hard-code for now
+   DvrData%OutFileData%OutFmt = "ES10.3E2" 
+   
    ! validate the inputs
    call WrScr('validating input')
    call ValidateInputs(DvrData, errStat2, errMsg2)
    call SetErrStat(errStat2, errMsg2, ErrStat, ErrMsg, RoutineName)
 
-   end subroutine Dvr_Init
+   end subroutine Interface_Init_Parameters
 
 
    !----------------------------------------------------------------------------------------------------------------------------------
@@ -519,255 +512,6 @@
 
    END SUBROUTINE Set_AD_Inflows
 
-
-
-   subroutine Dvr_ReadInputFile(fileName, DvrData, errStat, errMsg )
-   ! This routine opens the gets the data from the input files.
-
-   character(*),                  intent( in    )   :: fileName
-   type(Dvr_SimData),             intent(   out )   :: DvrData
-   integer,                       intent(   out )   :: errStat              ! returns a non-zero value when an error occurs
-   character(*),                  intent(   out )   :: errMsg               ! Error message if errStat /= ErrID_None
-
-
-   ! Local variables
-   character(1024)              :: PriPath
-   character(1024)              :: inpVersion                               ! String containing the input-version information.
-   character(1024)              :: line                                     ! String containing a line of input.
-   integer                      :: unIn, unEc
-   integer                      :: ICase
-   integer                      :: Sttus
-   character( 11)               :: DateNow                                  ! Date shortly after the start of execution.
-   character(  8)               :: TimeNow                                  ! Time of day shortly after the start of execution.
-
-   integer, parameter           :: NumCols = 7                              ! number of columns to be read from the input file
-   real(ReKi)                   :: InpCase(NumCols)                         ! Temporary array to hold combined-case input parameters.
-   logical                      :: TabDel
-   logical                      :: echo
-
-   INTEGER(IntKi)               :: ErrStat2                                 ! Temporary Error status
-   CHARACTER(ErrMsgLen)         :: ErrMsg2                                  ! Temporary Err msg
-   CHARACTER(*), PARAMETER      :: RoutineName = 'Dvr_ReadInputFile'
-
-
-   ErrStat = ErrID_None
-   ErrMsg  = ''
-   UnIn = -1
-   UnEc = -1
-
-   ! Open the input file
-   CALL GetPath( fileName, PriPath )     ! Input files will be relative to the path where the primary input file is located.
-
-   call GetNewUnit( unIn )
-   call OpenFInpFile( unIn, fileName, errStat2, ErrMsg2 )
-   call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   if ( errStat >= AbortErrLev ) then
-      call cleanup()
-      return
-   end if
-
-   ! Skip a line, read the run title information.
-   CALL ReadStr( UnIn, fileName, inpVersion, 'inpVersion', 'File Header: (line 1)', ErrStat2, ErrMsg2, UnEc )
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-   CALL ReadStr( UnIn, fileName, DvrData%OutFileData%runTitle, 'runTitle', 'File Header: File Description (line 2)', ErrStat2, ErrMsg2, UnEc )
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-   call WrScr1 ( ' '//DvrData%OutFileData%runTitle )
-
-   ! Read in the title line for the input-configuration subsection.
-   CALL ReadStr( UnIn, fileName, line, 'line', 'File Header: (line 3)', ErrStat2, ErrMsg2, UnEc )
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-
-   ! See if we should echo the output.
-   call ReadVar ( unIn, fileName, echo, 'Echo', 'Echo Input', errStat2, errMsg2, UnEc )
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-   if ( echo )  then
-      ! Get date and time.
-      dateNow = CurDate()
-      timeNow = CurTime()
-      call GetNewUnit( unEc )
-      call getroot(fileName,DvrData%OutFileData%Root)
-      call  OpenFOutFile ( unEc, trim( DvrData%OutFileData%Root )//'.ech', errStat2, errMsg2 )
-      call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-      if ( errStat >= AbortErrLev ) then
-         call cleanup()
-         return
-      end if
-
-      write (unEc,'(A)')      'Echo of Input File:'
-      write (unEc,'(A)')      ' "'//fileName//'"'
-      write (unEc,'(A)')      'Generated on: '//trim( dateNow )//' at '//trim( timeNow )//'.'
-      write (unEc,'(A)')      inpVersion
-      write (unEc,'(A)')      DvrData%OutFileData%runTitle
-      write (unEc,'(A)')      line
-      write (unEc,Ec_LgFrmt)  echo, 'Echo', 'Echo input parameters to "rootname.ech"?'
-   end if
-
-
-   ! Read the rest of input-configuration section.
-
-   call ReadVar ( unIn, fileName, DvrData%AD_InputFile,   'AD_InputFile',   'Name of the AeroDyn input file', errStat2, errMsg2, UnEc )
-   call SetErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   if ( errStat >= AbortErrLev ) then
-      call cleanup()
-      return
-   end if
-   IF ( PathIsRelative( DvrData%AD_InputFile ) ) DvrData%AD_InputFile = TRIM(PriPath)//TRIM(DvrData%AD_InputFile)
-
-
-   ! Read the turbine-data section.
-
-   call ReadCom ( unIn, fileName, 'the turbine-data subtitle', errStat2, errMsg2, UnEc )
-   call SetErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   call ReadVar ( unIn, fileName, DvrData%numBlades,'NumBlades','Number of blades', errStat2, errMsg2, UnEc )
-   call SetErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   call ReadVar ( unIn, fileName, DvrData%HubRad,   'HubRad',   'Hub radius (m)', errStat2, errMsg2, UnEc )
-   call SetErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   call ReadVar ( unIn, fileName, DvrData%HubHt,    'HubHt',    'Hub height (m)', errStat2, errMsg2, UnEc )
-   call SetErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   call ReadVar ( unIn, fileName, DvrData%Overhang, 'Overhang',  'Overhang (m)', errStat2, errMsg2, UnEc )
-   call SetErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   call ReadVar ( unIn, fileName, DvrData%ShftTilt, 'ShftTilt',  'Shaft tilt (deg)', errStat2, errMsg2, UnEc )
-   call SetErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   DvrData%ShftTilt = DvrData%ShftTilt*D2R
-   call ReadVar ( unIn, fileName, DvrData%precone, 'Precone',  'Precone (deg)', errStat2, errMsg2, UnEc )
-   call SetErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   DvrData%precone = DvrData%precone*D2R
-
-   ! Reading new lines added for PDS coupling
-   ! Total mass and inertia vector contains mass matrix elements ordered as {m11/m22/m33, m26/m62, m35/m53, m44, m55, m66}
-   ! Total Mass (m11/m22/m33)
-   CALL ReadVar( UnIn, filename, DvrData%MassAndInertia(1), "MassAndInertia(1)", "Total system mass (kg)", ErrStat2, ErrMsg2, UnEc)
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-   ! sway-yaw coupling term (m26/m62)
-   CALL ReadVar( UnIn, filename, DvrData%MassAndInertia(2), "MassAndInertia(2)", "Sway-yaw coupling moment of inertia (kg/m)", ErrStat2, ErrMsg2, UnEc)
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-   ! heave-pitch coupling term (m35/m53)
-   CALL ReadVar( UnIn, filename, DvrData%MassAndInertia(3), "MassAndInertia(3)", "Heave-pitch coupling moment of inertia (kg/m)", ErrStat2, ErrMsg2, UnEc)
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-   ! roll moment of inertia
-   CALL ReadVar( UnIn, filename, DvrData%MassAndInertia(4), "MassAndInertia(4)", "roll moment of inertia (about shaft and surge direction) (kg/m^2)", ErrStat2, ErrMsg2, UnEc)
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-   ! pitch moment of inertia
-   CALL ReadVar( UnIn, filename, DvrData%MassAndInertia(5), "MassAndInertia(5)", "pitch moment of inertia (about sway direction) (kg/m^2)", ErrStat2, ErrMsg2, UnEc)
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-   ! yaw moment of inertia
-   CALL ReadVar( UnIn, filename, DvrData%MassAndInertia(6), "MassAndInertia(6)", "yaw moment of inertia (about heave direction) (kg/m^2)", ErrStat2, ErrMsg2, UnEc)
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-   
-   ! AeroDyn's timestep
-   CALL ReadVar( UnIn, filename, DvrData%dt, "dt", "Time-step that Aerodyn will take (s)", ErrStat2, ErrMsg2, UnEc)
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-
-   ! Other
-   ! CG_Pos - Positions of CG relative to the hub along the shaft(kg m^2):
-   CALL ReadVar( UnIn, filename, DvrData%CG_Pos, "CG_Pos", "Position of center of gravity along rotor shaft, measured from rotor hub (m).", ErrStat2, ErrMsg2, UnEc)
-   CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-
-
-   if ( errStat >= AbortErrLev ) then
-      call cleanup()
-      return
-   end if
-
-
-   ! Read the I/O-configuration section.
-
-   call ReadCom ( unIn, fileName, 'the I/O-configuration subtitle', errStat2, errMsg2, UnEc )
-   call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   call ReadVar ( unIn, fileName, DvrData%OutFileData%Root, 'OutFileRoot', 'Root name for any output files', errStat2, errMsg2, UnEc )
-   call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   if (len_trim(DvrData%OutFileData%Root) == 0) then
-      call getroot(fileName,DvrData%OutFileData%Root)
-   end if
-
-   call ReadVar ( unIn, fileName, TabDel,   'TabDel',   'Make output tab-delimited (fixed-width otherwise)?', errStat2, errMsg2, UnEc )
-   call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   if (TabDel) then
-      DvrData%OutFileData%delim = TAB
-   else
-      DvrData%OutFileData%delim = " "
-   end if
-
-   ! OutFmt - Format used for text tabular output (except time).  Resulting field should be 10 characters. (-):
-   call ReadVar( UnIn, fileName, DvrData%OutFileData%OutFmt, "OutFmt", "Format used for text tabular output (except time).  Resulting field should be 10 characters. (-)", ErrStat2, ErrMsg2, UnEc)
-   call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName ) !bjj: this is a global variable in NWTC_Library
-   call ReadVar ( unIn, fileName, Beep,  'Beep',     'Beep on exit?', errStat2, errMsg2, UnEc )
-   call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName ) !bjj: this is a global variable in NWTC_Library
-   if ( errStat >= AbortErrLev ) then
-      call cleanup()
-      return
-   end if
-
-
-   ! @mth: above here ;
-
-   ! Read the combined-case section.
-
-   ! call ReadCom  ( unIn, fileName, 'the combined-case subtitle', errStat2, errMsg2, UnEc )
-   ! call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   ! call ReadVar  ( unIn, fileName, DvrData%NumCases, 'NumCases', 'Number of cases to run', errStat2, errMsg2, UnEc )
-   ! call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   ! call ReadCom  ( unIn, fileName, 'the combined-case-block header (names)', errStat2, errMsg2, UnEc )
-   ! call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-   ! call ReadCom  ( unIn, fileName, 'the combined-case-block header (units)', errStat2, errMsg2, UnEc )
-   ! call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-
-   ! if ( errStat >= AbortErrLev ) then
-   ! call cleanup()
-   ! return
-   ! end if
-
-   ! if ( DvrData%NumCases < 1 )  then
-   ! call setErrStat( ErrID_Fatal,'Variable "NumCases" must be > 0.' ,errstat,errmsg,routinename)
-   ! call cleanup()
-   ! return
-   ! end if
-
-   ! allocate ( DvrData%Cases(DvrData%NumCases) , STAT=Sttus )
-   ! if ( Sttus /= 0 )  then
-   ! call setErrStat( ErrID_Fatal,'Error allocating memory for the Cases array.',errstat,errmsg,routinename)
-   ! call cleanup()
-   ! return
-   ! end if
-
-   ! do ICase=1,DvrData%NumCases
-
-   ! call ReadAry ( unIn, fileName, InpCase,  NumCols, 'InpCase',  'parameters for Case #' &
-   ! //trim( Int2LStr( ICase ) )//'.', errStat2, errMsg2, UnEc )
-   ! call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
-
-   ! DvrData%Cases(iCase)%WndSpeed        = InpCase( 1)
-   ! DvrData%Cases(ICase)%ShearExp        = InpCase( 2)
-   ! DvrData%Cases(ICase)%RotSpeed        = InpCase( 3)*RPM2RPS
-   ! DvrData%Cases(ICase)%Pitch           = InpCase( 4)*D2R
-   ! DvrData%Cases(ICase)%Yaw             = InpCase( 5)*D2R
-   ! DvrData%Cases(iCase)%dT              = InpCase( 6)
-   ! DvrData%Cases(iCase)%Tmax            = InpCase( 7)
-
-   ! end do ! ICase
-
-   call cleanup ( )
-
-
-   RETURN
-   contains
-   subroutine cleanup()
-   if (UnIn>0) close(UnIn)
-   if (UnEc>0) close(UnEc)
-   end subroutine cleanup
-   !----------------------------------------------------------------------------------------------------------------------------------
-   end subroutine Dvr_ReadInputFile
-   !----------------------------------------------------------------------------------------------------------------------------------
    subroutine ValidateInputs(DvrData, errStat, errMsg)
 
    type(Dvr_SimData),             intent(in)    :: DvrData
@@ -791,7 +535,6 @@
    if ( DvrData%numBlades < 1 ) call SetErrStat( ErrID_Fatal, "There must be at least 1 blade (numBlades).", ErrStat, ErrMsg, RoutineName)
    if ( DvrData%numBlades > 3 ) call SetErrStat( ErrID_Fatal, "There can be no more than 3 blades (numBlades).", ErrStat, ErrMsg, RoutineName)
    if ( DvrData%HubRad < 0.0_ReKi .or. EqualRealNos(DvrData%HubRad, 0.0_ReKi) ) call SetErrStat( ErrID_Fatal, "HubRad must be a positive number.", ErrStat, ErrMsg, RoutineName)
-   if ( DvrData%HubHt < DvrData%HubRad ) call SetErrStat( ErrID_Fatal, "HubHt must be at least HubRad.", ErrStat, ErrMsg, RoutineName)
 
 
    ! I-O Settings:

@@ -53,20 +53,12 @@ typedef   ^                         ^             DbKi                   InputTi
 typedef   ^                        Dvr_SimData   character(1024)         AD_InputFile     -      -     -   "Name of AeroDyn input file" -
 typedef   ^                         ^            IntKi                   numBlades        -      -     -   "number of blades on turbine" "-"
 typedef   ^                         ^            ReKi                    hubRad           -      -     -   "Hub radius" "m"
-typedef   ^                         ^            ReKi                    hubHt            -      -     -   "Hub height" "m"
 typedef   ^                         ^            ReKi                    overhang         -      -     -   "overhang" "m"
 typedef   ^                         ^            ReKi                    ShftTilt         -      -     -   "Shaft tilt angle" "rad"
 typedef   ^                         ^            ReKi                    Precone          -      -     -   "Precone angle (all blades)" "rad"
-typedef   ^                         ^            IntKi                   NumCases         -      -     -   "number of time-marching cases to run" "-"
-typedef   ^                         ^            Dvr_Case                Cases           {:}     -     -   "table of cases to run" "-"
 typedef   ^                         ^            Dvr_OutputFile          OutFileData      -      -     -   "data for driver output file" "-"
 #typedef  ^                         ^            AeroDyn_Data            AD               -      -     -   "data for the AeroDyn module"
 typedef   ^                         ^            IntKi                   iADstep          -      -     -   "time step number of AeroDyn" "-"
-
-#
-# ..... Data for PDS coupling .......................................................................................................
-typedef	  ^                      	Dvr_SimData	 ReKi	                 MassAndInertia	 {6}	 -	   -   "total mass and moment of inertia of the combined turbine system.  Moments relative to hub position.  Order (m11, m22, m26/m62, m33, m35/m53, m44, m55, m66)"	-
-typedef	  ^	                        Dvr_SimData	 ReKi	                 CG_Pos	          -	     -	   -   "Position of center of gravity along rotor shaft, measured from rotor hub"	"m"                                                                                                                  
-typedef   ^                         Dvr_SimData  DbKi	                 dt               -      -     -   "Time-step that Aerodyn will take" "s"                                                                                                                                                             
+typedef   ^                         ^			 DbKi	                 dt               -      -     -   "Time-step that Aerodyn will take" "s"                                                                                                                                                             
                                                                                                                                                                  
 

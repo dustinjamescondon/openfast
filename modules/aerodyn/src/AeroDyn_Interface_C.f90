@@ -32,16 +32,19 @@
    !! inflows are set from an outside source, and that source needs to know the number of blades
    !! and nodes before sending inflows. Therefore, inflows must be set after this via initInflows
    !! once we know the number of nodes and blades.
-   subroutine Interface_InitAeroDyn_C(driverFileName,fname_len,useAddedMass,fluidDensity,kinematicFluidVisc,&
-      hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,nBlades,nNodes,turbineDiameter,instancePtr,&
+   subroutine Interface_InitAeroDyn_C(AD_inputFile,inputFile_len,AD_outputFile,outputFile_len,timestep,useAddedMass,fluidDensity,kinematicFluidVisc,&
+      hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,nBlades,bladePitch,hubRadius,precone,nNodes,turbineDiameter,instancePtr,&
       errStat_out, errMsg_out) !BIND(C, NAME="INTERFACE_INITAERODYN")
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_InitAerodyn_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_InitAerodyn_C
       !DEC$ ATTRIBUTES DECORATE, ALIAS: "INTERFACE_INITAERODYN":: Interface_InitAerodyn_C
       use, intrinsic :: ISO_C_BINDING, ONLY: C_CHAR, C_NULL_CHAR, C_PTR, C_LOC
       
-      integer(C_INT),                      intent(in   )  :: fname_len
-      character(fname_len, kind=C_CHAR),   intent(in   )  :: driverFileName
+      integer(C_INT),                      intent(in   )  :: inputFile_len
+      character(inputFile_len, kind=C_CHAR),   intent(in   )  :: AD_inputFile
+      integer(C_INT),                      intent(in   )  :: outputFile_len
+      character(outputFile_len, kind=C_CHAR), intent(in   )  :: AD_outputFile
+      real(C_DOUBLE),                      intent(in   )  :: timestep
       logical,                             intent(in   )  :: useAddedMass
       real(C_DOUBLE),                      intent(in   )  :: fluidDensity
       real(C_DOUBLE),                      intent(in   )  :: kinematicFluidVisc
@@ -51,10 +54,12 @@
       real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubAcc
       real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubRotVel
       real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubRotAcc
+      integer(C_INT),                      intent(in   )  :: nBlades
       real(C_DOUBLE),                      intent(in   )  :: bladePitch
-      real(C_DOUBLE),                      intent(  out)  :: turbineDiameter
-      integer(C_INT),                      intent(  out)  :: nBlades
+      real(C_DOUBLE),                      intent(in   )  :: hubRadius
+      real(C_DOUBLE),                      intent(in   )  :: precone
       integer(C_INT),                      intent(  out)  :: nNodes
+      real(C_DOUBLE),                      intent(  out)  :: turbineDiameter
       type(C_PTR),                         intent(  out)  :: instancePtr
       integer(C_INT),                      intent(  out)  :: ErrStat_out
       character(ErrMsgLen + 1,kind=C_CHAR),intent(  out)  :: ErrMsg_out
@@ -71,9 +76,9 @@
       simIns%ADInstance_Initialized = .false.
 
       CALL Interface_Init(simIns%AD, simIns%DvrData, &
-         simIns%ADInstance_Initialized, driverFileName,useAddedMass, &
+         simIns%ADInstance_Initialized,AD_inputFile,AD_outputFile,timestep,useAddedMass, &
          fluidDensity, kinematicFluidVisc, hubPos,hubOri,hubAcc,hubVel,         &
-         hubRotVel,hubRotAcc,bladePitch,nBlades, nNodes,turbineDiameter, errStat, errMsg)
+         hubRotVel,hubRotAcc,nBlades,bladePitch,hubRadius,precone,nNodes,turbineDiameter, errStat, errMsg)
       
       if ( NeedToAbort(errStat) ) then
          errStat_out = errStat

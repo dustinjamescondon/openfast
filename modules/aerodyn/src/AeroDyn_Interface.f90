@@ -28,12 +28,14 @@
 
    !-----------------------------------------------------------------------------------------------------------------------------------------------------------
    !>
-   SUBROUTINE Interface_Init(AD,DvrData,AD_Initialized,driverFileName,useAddedMass,fluidDensity,kinematicFluidVisc, &
-      hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,nBlades,nNodes,turbineDiameter,errStat,errMsg)
+   SUBROUTINE Interface_Init(AD,DvrData,AD_Initialized,AD_inputFile,AD_outputFile,timestep,useAddedMass,fluidDensity,kinematicFluidVisc, &
+      hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,numBlades,bladePitch,hubRadius,precone,nNodes,turbineDiameter,errStat,errMsg)
    type(AeroDyn_Data),                 intent(inout) :: AD
    type(Dvr_SimData),                  intent(inout) :: DvrData
    logical,                            intent(inout) :: AD_Initialized
-   character(*),                       intent(in   ) :: driverFileName
+   character(*),                       intent(in   ) :: AD_inputFile
+   character(*),                       intent(in   ) :: AD_outputFile
+   real(C_DOUBLE),                     intent(in   ) :: timestep
    logical,                            intent(in   ) :: useAddedMass
    real(C_DOUBLE),                     intent(in   ) :: fluidDensity
    real(C_DOUBLE),                     intent(in   ) :: kinematicFluidVisc
@@ -43,10 +45,12 @@
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubAcc
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubRotVel
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubRotAcc
-   real(C_DOUBLE),                     intent(in   ) :: bladePitch
+   integer(C_INT),                     intent(in   ) :: numBlades
+   real(C_DOUBLE),                     intent(in   ) :: bladePitch ! intial blade pitch in radians
+   real(C_DOUBLE),                     intent(in   ) :: hubRadius ! used to calculate the blade root positions
+   real(C_DOUBLE),                     intent(in   ) :: precone ! the precone angle in degrees
+   integer(C_INT),                     intent(out  ) :: nNodes  ! number of nodes per blade, as read from the input file
    real(C_DOUBLE),                     intent(out  ) :: turbineDiameter
-   integer(IntKi),                     intent(out  ) :: nBlades ! number of blades
-   integer(IntKi),                     intent(out  ) :: nNodes  ! number of nodes per blade, as read from the input file
    integer(IntKi),                     intent(out  ) :: errStat                      ! Status of error message
    character(ErrMsgLen),               intent(out  ) :: errMsg                       ! Error message if ErrStat /= ErrID_None
 
@@ -61,19 +65,13 @@
    real(ReKi)    :: rmax    ! storing the maximum radius of a blade node relative to hub center
    integer       :: j       ! for iterating through number of nodes on one blade
 
-   ! call function to initialize driver data, load in driver files, etc
-   ! @mth: note: this function needs to be updated to do all driver things we want
-   call Dvr_Init( driverFileName, DvrData, ErrStat, ErrMsg)
+   ! Call this function to validate the given parameters   
+   call Interface_Init_Parameters(AD_InputFile,AD_outputFile,timestep,numBlades,hubRadius,precone,DvrData,ErrStat,ErrMsg)
    !CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )   ! update error list if applicable
    if ( NeedToAbort(ErrStat) ) then
       return
    end if
-
-   nBlades = DvrData%numBlades
-   ! set the these to parameters from the arguments, which will overwrite what was specified in the input file
-   AD%p%AirDens = fluidDensity
-   AD%p%KinVisc = kinematicFluidVisc
-
+   
    ! Initialize AeroDyn
    ! Set the Initialization input data for AeroDyn based on the Driver input file data, and initialize AD
    ! (this also initializes inputs to AD for first time step)
@@ -82,11 +80,16 @@
    if( NeedToAbort(ErrStat) ) then
       return
    end if
+   
+   ! Set these parameters from the arguments, which will overwrite what was specified in the input file
+   !  Note: Setting these from subroutine arguments makes sense with the coupling because PDS can just set these according to
+   !        what its own simulation is using, rather than having to update the AD input file to match them.
+   AD%p%AirDens = fluidDensity
+   AD%p%KinVisc = kinematicFluidVisc
 
    AD_Initialized = .true.
 
-
-   nNodes = AD%p%NumBlNds
+   nNodes = AD%p%NumBlNds   
    
    AD%p%IncludeAddedMass = useAddedMass
 
@@ -294,24 +297,6 @@
    !  update states from prev time to current time
    !call AD_UpdateStates( time , DvrData%iADstep, AD%u, AD%InputTime, AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%m, errStat2, errMsg2 )
    !call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-
-   ! ------------------------- Mass and Inertia matrix ------------------------------
-   ! cross-coupling terms exist since coupling point is at the hub
-
-   massMatrix(1,1)  = DvrData%MassAndInertia(1)	! xx
-   massMatrix(2,2)  = DvrData%MassAndInertia(1)	! yy
-
-   massMatrix(6,2) = DvrData%MassAndInertia(2)	! sway-yaw coupling
-   massMatrix(2,6) = DvrData%MassAndInertia(2)	! yaw-sway coupling
-
-   massMatrix(3,3) = DvrData%MassAndInertia(1)	! zz
-
-   massMatrix(5,3) = DvrData%MassAndInertia(3)	! heave-pitch coupling
-   massMatrix(3,5) = DvrData%MassAndInertia(3)	! pitch-heave coupling
-
-   massMatrix(4,4) = DvrData%MassAndInertia(4)	! Roll moment of inertia, about rotor axis
-   massMatrix(5,5) = DvrData%MassAndInertia(5)	! Pitch moment of inerita, about axis perpendicular to rotor shaft
-   massMatrix(6,6) = DvrData%MassAndInertia(6)	! Yaw moment of inerita, about axis perpendicular to rotor shaft
 
    ! return the hub force and moment in the hub coordinate system back to the calling function
    force(1) = AD%m%AllOuts( RtAeroFxh )
