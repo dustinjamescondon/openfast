@@ -32,6 +32,7 @@
    contains
 
    !----------------------------------------------------------------------------------------------------------------------------------
+   !< TODO comment this
    subroutine Interface_Init_Parameters(inputFile,outputfile,timestep,numBlades,hubRad,precone,DvrData,errStat,errMsg )
 
    CHARACTER(*),              intent(in   ) :: InputFile     ! file name for AeroDyn input file
@@ -269,49 +270,98 @@
 
    end subroutine Init_AeroDyn
 
-   !----------------------------------------------------------------------
-   !!< Hasn't been tested
-   !subroutine CalcAddedMassMatrix(addedMassMatrix, m, p)
-   !   real(ReKi), dimension(1:6,1:6), intent(inout) :: addedMassMatrix !< 
-   !   type(AD_MiscVarType), intent(in)            :: m               !< Contains added mass data
-   !   type(AD_ParameterType), intent(in)          :: p      
-   !   ! local variables
-   !   integer(IntKi) :: i, j, k ! iterators 
-   !   real(ReKi)     :: magnitude
-   !   real(ReKi), dimension(1:6) :: e ! Will hold a unit vector
-   !   real(ReKi), dimension(1:6) :: totalAddedMassVec 
-   !
-   !   ! Make sure all entries are zero before we fill them in
-   !   addedMassMatrix(:,:) = 0.0_ReKi
-   !   
-   !   do k=1, p%NumBlades
-   !      do j=1, p%NumBlNds
-   !         ! get the squared magnitude by calculating the dot product of the added mass vector with itself
-   !         magnitude = dot_product(m%FAddedMass_vec(:,j,k), m%FAddedMass_vec(:,j,k))
-   !         ! then get the magnitude by calculating the square root
-   !         
-   !         if ( .not. EqualRealNos(magnitude, 0.0_ReKi) ) then
-   !            magnitude = sqrt(magnitude)
-   !         
-   !            ! Get the normalized added mass vector
-   !            e = m%FAddedMass_vec(:,j,k) / magnitude
-   !         
-   !            totalAddedMassVec = totalAddedMassVec + m%AddedMass(j,k) * e
-   !         
-   !         end if
-   !      end do ! numNodes
-   !   end do ! numBlades
-   !   
-   !   do i=1, 6
-   !      addedMassMatrix(i,i) = addedMassMatrix(i,i) + totalAddedMassVec(i)
-   !   end do ! i=6
-   !   
-	  ! ! @mh: TODO off diagonal terms?
-   !
-   !   
-   !end subroutine CalcAddedMassMatrix
-   !
+ 
+   !-----------------------------
+   !< Updates the blade node accelerations, positions, and velocities based on the hub's current rotational vel, acc, and linear acc
+   subroutine Calc_AD_NodeKinematics(hub_linear_acc, hub_angular_acc, u_AD, DvrData)
+   !.............................
+   real(C_DOUBLE),               dimension(1:3), intent(in   ) :: hub_linear_acc
+   real(C_DOUBLE),               dimension(1:3), intent(in   ) :: hub_angular_acc
+   type(AeroDyn_InputType),                      intent(inout) :: u_AD
+   type(Dvr_SimData),                            intent(inout) :: DvrData       ! Driver data
+   
+   real(ReKi)                                  :: rotVel_cross_offset(3) ! used in calculating blade node accelerations and velocities
+   real(ReKi)                                  :: rotAcc_cross_offset(3) ! used in calculating blade node accelerations
+   real(ReKi)                                  :: orientation(3,3)
+   real(ReKi)                                  :: rotateMat(3,3)
+   integer(IntKi) :: k ! blade index
+   integer(IntKi) :: j ! blade node index
 
+   ! First set the input hub acceleration fields directly
+   u_AD%HubMotion%TranslationAcc(:,1) = hub_linear_acc
+   u_AD%HubMotion%RotationAcc(:,1)    = hub_angular_acc
+   
+   ! Then calculate the blade node accelerations based on those previous accelerations
+   do k=1,DvrData%numBlades
+      rotateMat = transpose( u_AD%BladeRootMotion(k)%Orientation(  :,:,1) )
+      rotateMat = matmul( rotateMat, u_AD%BladeRootMotion(k)%RefOrientation(  :,:,1) )
+      orientation = transpose(rotateMat)
+
+      rotateMat(1,1) = rotateMat(1,1) - 1.0_ReKi
+      rotateMat(2,2) = rotateMat(2,2) - 1.0_ReKi
+      rotateMat(3,3) = rotateMat(3,3) - 1.0_ReKi
+
+      do j=1,u_AD%BladeMotion(k)%nnodes
+         position  u_AD%BladeMotion(k)%Position(:,j)
+         u_AD%BladeMotion(k)%TranslationDisp(:,j) = matmul( rotateMat, position ) + u_AD%HubMotion%Position(:,1)
+
+         u_AD%BladeMotion(k)%Orientation(  :,:,j) = matmul( u_AD%BladeMotion(k)%RefOrientation(:,:,j), orientation )
+
+         position =  u_AD%BladeMotion(k)%Position(:,j) + u_AD%BladeMotion(k)%TranslationDisp(:,j) &
+            - u_AD%HubMotion%Position(:,1) - u_AD%HubMotion%TranslationDisp(:,1)
+            
+         rotVel_cross_offset = cross_product( u_AD%HubMotion%RotationVel(:,1), position )
+         rotAcc_cross_offset = cross_product( u_AD%HubMotion%RotationAcc(:,1), position )
+         u_AD%BladeMotion(k)%TranslationVel( :,j) = rotVel_cross_offset + u_AD%HubMotion%TranslationVel( :,1)
+         u_AD%BladeMotion(k)%TranslationAcc( :,j) = rotAcc_cross_offset + rotVel_cross_offset + u_AD%HubMotion%TranslationAcc( :,1)
+
+      end do !j=nnodes
+
+   end do !k=numBlades   
+   end subroutine Calc_AD_NodeKinematics
+   
+   !----------------------------------------------------------------------------------------------------------------------------------
+   !< AeroDyn (with added mass) has two inputs that are accelerations and are therefore part of the direct feedthrough problem: linear acceleration
+   !< and angular acceleration, and both have 3 components; therefore, there are 6 inputs to perturb in total
+   subroutine Perturb_AD_u( n, perturb, u_AD_perturb, DvrData )
+   !..................................................................................................................................
+   integer(IntKi),     intent(in   ) :: n            !< number of array element to use
+   real(ReKi),         intent(in   ) :: perturb      !< The amount the input will be perturbed by
+   type(AD_InputType), intent(inout) :: u_AD_perturb !< AD System inputs
+   type(Dvr_SimData),  intent(inout) :: DvrData      !< Driver data
+   
+   real(ReKi),         dimension(1:3) :: perturbed_vec3
+
+   ! Base the value to be perturbed on the value of n, where 1 <= n <= 6. This makes it possible to use iteration
+   ! when calculating the Jacobian of the residual function for AeroDyn
+   select case( n )
+   case ( 1) ! x component of linear acceleration
+      perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
+      perturbed_vec3(1) = perturbed_vec3(1) + perturb
+      CalcAD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
+   case ( 2) ! y component of linear acceleration
+      perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
+      perturbed_vec3(2) = perturbed_vec3(2) + perturb
+      CalcAD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
+   case ( 3) ! z component of linear acceleration
+      perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
+      perturbed_vec3(3) = perturbed_vec3(3) + perturb
+      CalcAD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
+   case ( 4) ! x component of rotational acceleration
+      perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
+      perturbed_vec3(1) = perturbed_vec3(1) + perturb
+      CalcAD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
+   case ( 5) ! y component of rotational acceleration
+      pertrbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
+      perturbed_vec3(2) = perturbed_vec3(2) + perturb
+      CalcAD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
+   case ( 6) ! z component of rotational acceleration
+      perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
+      perturbed_vec3(3) = perturbed_vec3(3) + perturb
+      CalcAD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
+   end select
+   end subroutine Perturb_AD_u
+   
    !----------------------------------------------------------------------------------------------------------------------------------
    !> this routine returns time=(nt-1) * DvrData%Cases(iCase)%dT, and cycles values in the input array AD%InputTime and AD%u.
    !! it then sets the inputs for nt * DvrData%Cases(iCase)%dT, which are index values 1 in the arrays.
@@ -376,7 +426,7 @@
    !................
    ! calculate new values
    !................
-
+   
    ! Tower motions:
    do j=1,AD%u(1)%TowerMotion%nnodes
       AD%u(1)%TowerMotion%Orientation(  :,:,j) = AD%u(1)%TowerMotion%RefOrientation(:,:,j) ! identity
@@ -447,7 +497,7 @@
             
          rotVel_cross_offset = cross_product( AD%u(1)%HubMotion%RotationVel(:,1), position )
          rotAcc_cross_offset = cross_product( AD%u(1)%HubMotion%RotationAcc(:,1), position )
-         AD%u(1)%BladeMotion(k)%TranslationVel( :,j) = rotVel_cross_offset + hubVel ! add hub vel because hub can a linear velocity
+         AD%u(1)%BladeMotion(k)%TranslationVel( :,j) = rotVel_cross_offset + hubVel ! add hub vel because hub can have a linear velocity
          AD%u(1)%BladeMotion(k)%TranslationAcc( :,j) = rotAcc_cross_offset + rotVel_cross_offset + hubAcc
 
       end do !j=nnodes

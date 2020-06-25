@@ -59,6 +59,5 @@ typedef   ^                         ^            ReKi                    Precone
 typedef   ^                         ^            Dvr_OutputFile          OutFileData      -      -     -   "data for driver output file" "-"
 #typedef  ^                         ^            AeroDyn_Data            AD               -      -     -   "data for the AeroDyn module"
 typedef   ^                         ^            IntKi                   iADstep          -      -     -   "time step number of AeroDyn" "-"
-typedef   ^                         ^			 DbKi	                 dt               -      -     -   "Time-step that Aerodyn will take" "s"                                                                                                                                                             
-                                                                                                                                                                 
+typedef   ^                         ^			 DbKi	                 dt               -      -     -   "Time-step that Aerodyn will take" "s"                                                                                                      
 

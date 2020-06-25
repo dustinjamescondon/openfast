@@ -11,10 +11,10 @@
 
    implicit none
    
-   PUBLIC :: Interface_InitAeroDyn_C		! Wrap initialization function
-   PUBLIC :: Interface_UpdateStates_C		! Steps AD ahead one internal step
-   PUBLIC :: Interface_GetBladeNodePos_C		! Pass blade node positions up to wrapper to go to PDS
-   PUBLIC :: Interface_End_C 		! Destroy data structures used by AD and PDS, also generate output files?
+   PUBLIC :: Interface_InitAeroDyn_C		 ! Wrap initialization function
+   PUBLIC :: Interface_UpdateStates_C		 ! Steps AD ahead one internal step
+   PUBLIC :: Interface_GetBladeNodePos_C   ! Pass blade node positions up to wrapper to go to PDS
+   PUBLIC :: Interface_End_C 		          ! Destroy data structures used by AD and PDS, also generate output files?
    
    type, private :: SimInstance
       type(AeroDyn_Data)                 :: AD
@@ -187,7 +187,7 @@
 
    END SUBROUTINE Interface_SetInflows_C
    
-      !----------------------------------------------------------------------------------
+   !----------------------------------------------------------------------------------
    !> 
    SUBROUTINE Interface_SetInflows_Fake_C(simInsAddr, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc) BIND(C, NAME='INTERFACE_SETINFLOWS_FAKE')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_SetInflows_Fake_C
@@ -206,7 +206,69 @@
 
    END SUBROUTINE Interface_SetInflows_Fake_C
 
+   !----------------------------------------------------------------------------------
+   !< 
+   SUBROUTINE Interface_CalcOutput_C(simInsAddr, force, moment) BIND(C, NAME='INTERFACE_CALCOUTPUT')
+      !DEC$ ATTRIBUTES DLLEXPORT::Interface_CalcOutput_C
+      !GCC$ ATTRIBUTES DLLEXPORT::Interface_CalcOutput_C
+      use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
+      
+      type(C_PTR), value,     intent(in   ) :: simInsAddr
+      type(SimInstance), pointer            :: v
+      real(C_DOUBLE), dimension(1:3), intent(  out)	:: force     ! 3D force (Fx, Fy, Fz)
+      real(C_DOUBLE), dimension(1:3), intent(  out)   :: moment    ! moment (Mx, My, Mz) at rotor hub
+      
+      real(C_DOUBLE)                                  :: time_ad
+      
+      call C_F_POINTER(simInsAddr, v))
+      
+      time_ad = DvrData%iADStep * DvrData%dt
+      
+      ! This will update the AllOuts entries
+      call AD_CalcOutput( time_ad, v%AD%u(1), v%AD%p, v%AD%x, v%AD%xd, v%AD%z, v%AD%OtherState, v%AD%y, v%AD%m, errStat2, errMsg2 )
+      
+      ! So then set the output arguments accordingly
+      force(1) =  v%AD%m%AllOuts( RtAeroFxh )
+      force(2) =  v%AD%m%AllOuts( RtAeroFyh )
+      force(3) =  v%AD%m%AllOuts( RtAeroFzh )
+                  
+      moment(1) = v%AD%m%AllOuts( RtAeroMxh )
+      moment(2) = v%AD%m%AllOuts( RtAeroMyh )
+      moment(3) = v%AD%m%AllOuts( RtAeroMzh )
+      
+   END SUBROUTINE Interface_CalcOutput_C
+   
+      !----------------------------------------------------------------------------------
+   !< 
+   SUBROUTINE Interface_CalcOutput_Fake_C(simInsAddr, force, moment) BIND(C, NAME='INTERFACE_CALCOUTPUT')
+      !DEC$ ATTRIBUTES DLLEXPORT::Interface_CalcOutput_C
+      !GCC$ ATTRIBUTES DLLEXPORT::Interface_CalcOutput_C
+      use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
+      
+      type(C_PTR), value,     intent(in   ) :: simInsAddr
+      type(SimInstance), pointer            :: v
+      real(C_DOUBLE), dimension(1:3), intent(  out)	:: force     ! 3D force (Fx, Fy, Fz)
+      real(C_DOUBLE), dimension(1:3), intent(  out)   :: moment    ! moment (Mx, My, Mz) at rotor hub
+      
+      real(C_DOUBLE)                                  :: time_ad
 
+      call C_F_POINTER(simInsAddr, v))
+      
+      time_ad = DvrData%iADStep * DvrData%dt
+      
+      ! This will update the AllOuts entries
+      call AD_CalcOutput( time_ad , v%AD_fake%u(1), v%AD_fake%p, v%AD_fake%x, v%AD_fake%xd, v%AD_fake%z, v%AD_fake%OtherState, v%AD_fake%y, v%AD_fake%m, errStat2, errMsg2 )
+      
+      ! So then set the output arguments accordingly
+      force(1) =  v%AD_fake%m%AllOuts( RtAeroFxh )
+      force(2) =  v%AD_fake%m%AllOuts( RtAeroFyh )
+      force(3) =  v%AD_fake%m%AllOuts( RtAeroFzh )
+                  
+      moment(1) = v%AD_fake%m%AllOuts( RtAeroMxh )
+      moment(2) = v%AD_fake%m%AllOuts( RtAeroMyh )
+      moment(3) = v%AD_fake%m%AllOuts( RtAeroMzh )
+      
+   END SUBROUTINE Interface_CalcOutput_Fake_C
    
    !---------------------------------------------------------------------------------------------------------------------------------------------------------------
    SUBROUTINE Interface_UpdateStates_C(simInsAddr, force, moment, power, tsr,massMatrix, addedMassMatrix) BIND(C, NAME='INTERFACE_UPDATESTATES')
