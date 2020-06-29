@@ -93,9 +93,9 @@
 		<File RelativePath="..\..\modules\AeroDyn\src\AeroDyn_Registry.txt">
 			<FileConfiguration Name="Debug_Double|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Debug|Win32">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release_Double|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Debug|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration>
@@ -103,9 +103,9 @@
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Debug_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Release_Double|x64">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Release_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn" Description="Running Registry for AeroDyn" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Types.f90"/></FileConfiguration></File>
 		<File RelativePath="..\..\modules\AeroDyn\src\AeroDyn_Types.f90">
 			<FileConfiguration Name="Debug_Double|Win32">
@@ -123,9 +123,9 @@
 		<File RelativePath="..\..\modules\aerodyn\src\AeroDyn_Interface_Registry.txt">
 			<FileConfiguration Name="Debug_Double|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Debug|Win32">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release_Double|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Debug|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration>
@@ -133,12 +133,11 @@
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Debug_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Release|Win32">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release_Double|x64">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Release|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AeroDyn_Interface" Description="Running Registry for AeroDyn Interface" Outputs="..\..\modules\AeroDyn\src\AeroDyn_Interface_Types.f90"/></FileConfiguration></File>
 		<File RelativePath="..\..\modules\aerodyn\src\AeroDyn_Interface_Types.f90"/></Filter>
-		<File RelativePath="..\..\modules\aerodyn\src\AeroDyn_Interface.f90"/>
 		<File RelativePath="..\..\modules\aerodyn\src\AeroDyn_Interface_C.f90"/>
 		<File RelativePath="..\..\modules\aerodyn\src\AeroDyn_Interface_Subs.f90"/></Filter>
 		<Filter Name="AirFoil_Info">
@@ -146,9 +145,9 @@
 		<File RelativePath="..\..\modules\AeroDyn\src\AirfoilInfo_Registry.txt">
 			<FileConfiguration Name="Debug_Double|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Debug|Win32">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release_Double|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Debug|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration>
@@ -156,9 +155,9 @@
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Debug_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Release_Double|x64">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Release_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat AFI" Description="Running Registry for AirfoilInfo" Outputs="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90"/></FileConfiguration></File>
 		<File RelativePath="..\..\modules\AeroDyn\src\AirfoilInfo_Types.f90">
 			<FileConfiguration Name="Debug_Double|Win32">
@@ -175,9 +174,9 @@
 		<File RelativePath="..\..\modules\AeroDyn\src\BEMT_Registry.txt">
 			<FileConfiguration Name="Debug_Double|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Debug|Win32">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release_Double|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Debug|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration>
@@ -185,9 +184,9 @@
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Debug_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Release_Double|x64">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Release_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat BEMT" Description="Running Registry for BEMT" Outputs="..\..\modules\AeroDyn\src\BEMT_Types.f90"/></FileConfiguration></File>
 		<File RelativePath="..\..\modules\AeroDyn\src\BEMT_Types.f90">
 			<FileConfiguration Name="Debug_Double|Win32">
@@ -206,9 +205,9 @@
 		<File RelativePath="..\..\modules\AeroDyn\src\DBEMT_Registry.txt">
 			<FileConfiguration Name="Debug_Double|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Debug|Win32">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release_Double|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Debug|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration>
@@ -216,9 +215,9 @@
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Debug_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Release_Double|x64">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Release_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat DBEMT" Description="Running Registry for DBEMT" Outputs="..\..\modules\AeroDyn\src\DBEMT_Types.f90"/></FileConfiguration></File>
 		<File RelativePath="..\..\modules\AeroDyn\src\DBEMT_Types.f90">
 			<FileConfiguration Name="Debug_Double|Win32">
@@ -236,20 +235,20 @@
 		<File RelativePath="..\..\modules\nwtc-library\src\NetLib\Dierckx_FitPack\dierckx_fitpack.f">
 			<FileConfiguration Name="Debug_Double|Win32">
 				<Tool Name="VFFortranCompilerTool" StandardWarnings="standardWarningsNone" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration>
-			<FileConfiguration Name="Release_Double|Win32">
-				<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration>
 			<FileConfiguration Name="Debug|Win32">
 				<Tool Name="VFFortranCompilerTool" StandardWarnings="standardWarningsNone" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration>
+			<FileConfiguration Name="Release_Double|Win32">
+				<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration>
 			<FileConfiguration Name="Release|x64">
 				<Tool Name="VFFortranCompilerTool" StandardWarnings="standardWarningsNone" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration>
 			<FileConfiguration Name="Debug|x64">
 				<Tool Name="VFFortranCompilerTool" StandardWarnings="standardWarningsNone" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration>
 			<FileConfiguration Name="Debug_Double|x64">
 				<Tool Name="VFFortranCompilerTool" StandardWarnings="standardWarningsNone" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration>
-			<FileConfiguration Name="Release_Double|x64">
-				<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration>
 			<FileConfiguration Name="Release|Win32">
-				<Tool Name="VFFortranCompilerTool" StandardWarnings="standardWarningsNone" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration></File>
+				<Tool Name="VFFortranCompilerTool" StandardWarnings="standardWarningsNone" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration>
+			<FileConfiguration Name="Release_Double|x64">
+				<Tool Name="VFFortranCompilerTool" RealKIND="realKIND4" DoublePrecisionKIND="doublePrecisionKIND8"/></FileConfiguration></File>
 		<File RelativePath="..\..\modules\nwtc-library\src\NetLib\Dierckx_FitPack\NWTC_FitPack.f90">
 			<FileConfiguration Name="Debug_Double|Win32">
 				<Tool Name="VFFortranCompilerTool" RealKIND="realKIND8" DoublePrecisionKIND="doublePrecisionKIND16"/></FileConfiguration>
@@ -283,9 +282,9 @@
 		<File RelativePath="..\..\modules\AeroDyn\src\UnsteadyAero_Registry.txt">
 			<FileConfiguration Name="Debug_Double|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Debug|Win32">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release_Double|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Debug|Win32">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration>
@@ -293,9 +292,9 @@
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Debug_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration>
-			<FileConfiguration Name="Release_Double|x64">
-				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration>
 			<FileConfiguration Name="Release|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration>
+			<FileConfiguration Name="Release_Double|x64">
 				<Tool Name="VFCustomBuildTool" CommandLine="CALL ..\RunRegistry.bat UA" Description="Running Registry for UnsteadyAero" Outputs="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></FileConfiguration></File>
 		<File RelativePath="..\..\modules\AeroDyn\src\UnsteadyAero_Types.f90"/></Filter>
 		<File RelativePath="..\..\modules\AeroDyn\src\UnsteadyAero.f90"/></Filter>

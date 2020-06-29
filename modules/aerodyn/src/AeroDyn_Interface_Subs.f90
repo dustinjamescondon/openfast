@@ -30,6 +30,20 @@
    TYPE(ProgDesc), PARAMETER   :: version   = ProgDesc( 'AeroDyn_Interface_Subs', '', '' )  ! The version number of this program.
    
    contains
+   !---------------------------------------------------------------
+   !> Returns true if we need to abort, and false if otherwise
+   FUNCTION NeedToAbort(ErrStat) result(abort)
+   integer(IntKi),         intent(in) :: ErrStat              ! Status of error message
+
+   logical                          :: abort
+
+   abort = .false.
+
+   if (ErrStat >= AbortErrLev) then
+      abort = .true.
+   end if
+
+   END FUNCTION NeedToAbort
 
    !----------------------------------------------------------------------------------------------------------------------------------
    !< TODO comment this
@@ -62,7 +76,7 @@
 
    CALL NWTC_Init()
    ! Display the copyright notice
-   CALL DispCopyrightLicense( version ) ! djc: commented this out because it kept hanging on a Write statement
+   CALL DispCopyrightLicense( version ) ! djc: commented this out before because it kept hanging on a Write statement
    ! Obtain OpenFAST git commit hash
    git_commit = QueryGitVersion()
    ! Tell our users what they're running
@@ -99,11 +113,12 @@
    real(R8Ki), dimension(1:3),     intent(in   ) :: hubRotAcc
    real(R8Ki),                     intent(in   ) :: bladePitch
    real(DbKi),                     intent(inout) :: dt
-   logical,                        intent(in   ) :: useAddedMass
+   logical(kind=C_BOOL),                        intent(in   ) :: useAddedMass
    integer(IntKi),                 intent(  out) :: errStat       ! Status of error message
    character(*),                   intent(  out) :: errMsg        ! Error message if ErrStat /= ErrID_None
 
    ! locals
+   real(DbKi)                                  :: time
    real(reKi)                                  :: theta(3)
    integer(IntKi)                              :: j, k
    integer(IntKi)                              :: errStat2      ! local status of error message
@@ -186,8 +201,12 @@
    DO j = -numInp, -1
       !extrapOri = hubOri - (hubRotVel * (dt * j) ) ! this won't work with all orientations
       extrapOri(:,:) = ExtrapOrientationFromRotVel(hubOri, hubRotVel, dt * j)
-      call Set_AD_Inputs(dt * j,DvrData,AD,hubPos,extrapOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,errStat2,errMsg2)
-      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      time = dt * j
+      call Set_AD_Inputs_Hub(time,DvrData,AD%u(1),hubPos,extrapOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      call Advance_AD_InputWindow(AD, errStat2, errMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+
    END DO
    
    DvrData%iADStep = -1
@@ -277,13 +296,14 @@
    !.............................
    real(C_DOUBLE),               dimension(1:3), intent(in   ) :: hub_linear_acc
    real(C_DOUBLE),               dimension(1:3), intent(in   ) :: hub_angular_acc
-   type(AeroDyn_InputType),                      intent(inout) :: u_AD
+   type(AD_InputType),                      intent(inout) :: u_AD
    type(Dvr_SimData),                            intent(inout) :: DvrData       ! Driver data
    
    real(ReKi)                                  :: rotVel_cross_offset(3) ! used in calculating blade node accelerations and velocities
    real(ReKi)                                  :: rotAcc_cross_offset(3) ! used in calculating blade node accelerations
    real(ReKi)                                  :: orientation(3,3)
    real(ReKi)                                  :: rotateMat(3,3)
+   real(ReKi)                                  :: position(3)
    integer(IntKi) :: k ! blade index
    integer(IntKi) :: j ! blade node index
 
@@ -302,7 +322,7 @@
       rotateMat(3,3) = rotateMat(3,3) - 1.0_ReKi
 
       do j=1,u_AD%BladeMotion(k)%nnodes
-         position  u_AD%BladeMotion(k)%Position(:,j)
+         position = u_AD%BladeMotion(k)%Position(:,j)
          u_AD%BladeMotion(k)%TranslationDisp(:,j) = matmul( rotateMat, position ) + u_AD%HubMotion%Position(:,1)
 
          u_AD%BladeMotion(k)%Orientation(  :,:,j) = matmul( u_AD%BladeMotion(k)%RefOrientation(:,:,j), orientation )
@@ -332,44 +352,43 @@
    
    real(ReKi),         dimension(1:3) :: perturbed_vec3
 
-   ! Base the value to be perturbed on the value of n, where 1 <= n <= 6. This makes it possible to use iteration
-   ! when calculating the Jacobian of the residual function for AeroDyn
-   select case( n )
-   case ( 1) ! x component of linear acceleration
-      perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
-      perturbed_vec3(1) = perturbed_vec3(1) + perturb
-      CalcAD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
-   case ( 2) ! y component of linear acceleration
-      perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
-      perturbed_vec3(2) = perturbed_vec3(2) + perturb
-      CalcAD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
-   case ( 3) ! z component of linear acceleration
-      perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
-      perturbed_vec3(3) = perturbed_vec3(3) + perturb
-      CalcAD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
-   case ( 4) ! x component of rotational acceleration
-      perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
-      perturbed_vec3(1) = perturbed_vec3(1) + perturb
-      CalcAD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
-   case ( 5) ! y component of rotational acceleration
-      pertrbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
-      perturbed_vec3(2) = perturbed_vec3(2) + perturb
-      CalcAD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
-   case ( 6) ! z component of rotational acceleration
-      perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
-      perturbed_vec3(3) = perturbed_vec3(3) + perturb
-      CalcAD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
-   end select
+      ! Base the value to be perturbed on the value of n, where 1 <= n <= 6. This makes it possible to use iteration
+      ! when calculating the Jacobian of the residual function for AeroDyn
+      select case( n )
+      case ( 1) ! x component of linear acceleration
+         perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
+         perturbed_vec3(1) = perturbed_vec3(1) + perturb
+         call Calc_AD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
+      case ( 2) ! y component of linear acceleration
+         perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
+         perturbed_vec3(2) = perturbed_vec3(2) + perturb
+         call Calc_AD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
+      case ( 3) ! z component of linear acceleration
+         perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
+         perturbed_vec3(3) = perturbed_vec3(3) + perturb
+         call Calc_AD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
+      case ( 4) ! x component of rotational acceleration
+         perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
+         perturbed_vec3(1) = perturbed_vec3(1) + perturb
+         call Calc_AD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
+      case ( 5) ! y component of rotational acceleration
+         perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
+         perturbed_vec3(2) = perturbed_vec3(2) + perturb
+         call Calc_AD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
+      case ( 6) ! z component of rotational acceleration
+         perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
+         perturbed_vec3(3) = perturbed_vec3(3) + perturb
+         call Calc_AD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
+      end select
    end subroutine Perturb_AD_u
    
    !----------------------------------------------------------------------------------------------------------------------------------
-   !> this routine returns time=(nt-1) * DvrData%Cases(iCase)%dT, and cycles values in the input array AD%InputTime and AD%u.
-   !! it then sets the inputs for nt * DvrData%Cases(iCase)%dT, which are index values 1 in the arrays.
-   subroutine Set_AD_Inputs(time,DvrData,AD,hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,errStat,errMsg)
+   !> This overwrites the first input in 
+   subroutine Set_AD_Inputs_Hub(time,DvrData,u,hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
 
    real(DbKi),                         intent(in   ) :: time          ! time of the inputs (changed from timestep number because now using variable timestep)
    type(Dvr_SimData),                  intent(inout) :: DvrData       ! Driver data
-   type(AeroDyn_Data),                 intent(inout) :: AD            ! AeroDyn data
+   type(AD_InputType),                 intent(inout) :: u             ! AeroDyn input
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubPos        ! x,y,z in meters
    real(C_DOUBLE), dimension(1:3,1:3), intent(in   ) :: hubOri        ! the hub's orientation matrix (local to global)
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubVel        ! x,y,z in meters/sec
@@ -377,14 +396,8 @@
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubRotVel     ! axis-angle in global coordinate system, (magnitute in radians/sec)
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubRotAcc     ! axis-angle in global coordinate system, (magnitute in radians/sec^2)
    real(C_DOUBLE),                     intent(in   ) :: bladePitch
-   integer(IntKi),                     intent(  out) :: errStat       ! Status of error message
-   character(*),                       intent(  out) :: errMsg        ! Error message if ErrStat /= ErrID_None
 
    ! local variables
-   integer(IntKi)                              :: errStat2      ! local status of error message
-   character(ErrMsgLen)                        :: errMsg2       ! local error message if ErrStat /= ErrID_None
-   character(*), parameter                     :: RoutineName = 'Set_AD_Inputs'
-
    integer(intKi)		                          :: i 	          ! loop counter for dimensions
    integer(intKi)                              :: j             ! loop counter for nodes
    integer(intKi)                              :: k             ! loop counter for blades
@@ -401,67 +414,44 @@
    real(DbKi)                                  :: ad_time
    real(DbKi), parameter                       :: epsilon = 1.0e-6
 
-   errStat = ErrID_None
-   errMsg  = ""
-
-   ! note that this initialization is a little different than the general algorithm in FAST because here
-   ! we can get exact values, so we are going to ignore initial guesses and not extrapolate
-
-   
-   !if ( time <= AD%InputTime(1) .OR. EqualRealNos(time, AD%InputTime(1) )) then
-      !return 
-   !end if
-   
-   !................
-   ! shift previous calculations:
-   !................
-   do j = numInp-1,1,-1
-      call AD_CopyInput (AD%u(j),  AD%u(j+1),  MESH_UPDATECOPY, ErrStat2, ErrMsg2)
-      call SetErrStat(ErrStat2,ErrMsg2,ErrStat,ErrMsg,RoutineName)
-
-      AD%InputTime(j+1) = AD%InputTime(j)
-   end do
-   AD%inputTime(1) = time
-
    !................
    ! calculate new values
    !................
    
    ! Tower motions:
-   do j=1,AD%u(1)%TowerMotion%nnodes
-      AD%u(1)%TowerMotion%Orientation(  :,:,j) = AD%u(1)%TowerMotion%RefOrientation(:,:,j) ! identity
-      AD%u(1)%TowerMotion%TranslationDisp(:,j) = 0.0_ReKi
-      AD%u(1)%TowerMotion%TranslationVel( :,j) = 0.0_ReKi
+   do j=1,u%TowerMotion%nnodes
+      u%TowerMotion%Orientation(  :,:,j) = u%TowerMotion%RefOrientation(:,:,j) ! identity
+      u%TowerMotion%TranslationDisp(:,j) = 0.0_ReKi
+      u%TowerMotion%TranslationVel( :,j) = 0.0_ReKi
    end do !j=nnodes
 
    !.................
    ! Debug stuff (Visual studio's debugger doesn't display the values of non-local variables sometimes, but assigning them
    !              to a local variable allows us to see them)
-   vec_hold = AD%u(1)%HubMotion%RotationVel(:,1)
-   mat_hold = AD%u(1)%HubMotion%RefOrientation(:,:,1)
+   vec_hold = u%HubMotion%RotationVel(:,1)
+   mat_hold = u%HubMotion%RefOrientation(:,:,1)
    !.................
 
    ! Hub motions:
 
-   AD%u(1)%HubMotion%Position(:,1) = HubPos
+   u%HubMotion%Position(:,1) = HubPos
    
    ! This would usually express where the hub is rotated to around the tower. Since we want hub to rotate around its center -
    ! i.e. not change position upon rotation - we just set this to zero.
-   AD%u(1)%HubMotion%TranslationDisp(:,1) = 0.0
+   u%HubMotion%TranslationDisp(:,1) = 0.0
 
-   !AD%u(1)%HubMotion%TranslationDisp(:,1) = 0.0 !matmul( AD%u(1)%HubMotion%Position(:,1), orientation ) - AD%u(1)%HubMotion%Position(:,1) ! = matmul( transpose(orientation) - eye(3), AD%u(1)%HubMotion%Position(:,1) )
 
    ! Rather than pass the Euler angles we pass the orientation matrix itself
    ! Note that HubMotion's orientation needs to be global to local, and our parameter
    ! is local to global, so we do the transpose here
-   AD%u(1)%HubMotion%Orientation(  :,:,1) = transpose(hubOri(:,:))
+   u%HubMotion%Orientation(  :,:,1) = transpose(hubOri(:,:))
  
    ! set the rotational velocity directly from the argument (expected to be global axis-angle rotational vel)
-   AD%u(1)%HubMotion%RotationVel(    :,1) = hubRotVel
-   AD%u(1)%HubMotion%RotationAcc(    :,1) = hubRotAcc
+   u%HubMotion%RotationVel(    :,1) = hubRotVel
+   u%HubMotion%RotationAcc(    :,1) = hubRotAcc
 
-   AD%u(1)%HubMotion%TranslationVel(:,1) = hubVel
-   AD%u(1)%HubMotion%TranslationAcc(:,1) = hubAcc
+   u%HubMotion%TranslationVel(:,1) = hubVel
+   u%HubMotion%TranslationAcc(:,1) = hubAcc
 
 
    ! Blade root motions:
@@ -472,53 +462,75 @@
       theta(3) = -bladePitch
       orientation = EulerConstruct(theta)
 
-      AD%u(1)%BladeRootMotion(k)%Orientation(  :,:,1) = matmul( orientation, AD%u(1)%HubMotion%Orientation(  :,:,1) )
+      u%BladeRootMotion(k)%Orientation(  :,:,1) = matmul( orientation, u%HubMotion%Orientation(  :,:,1) )
 
    end do !k=numBlades
 
    ! Blade motions:
    do k=1,DvrData%numBlades
-      rotateMat = transpose( AD%u(1)%BladeRootMotion(k)%Orientation(  :,:,1) )
-      rotateMat = matmul( rotateMat, AD%u(1)%BladeRootMotion(k)%RefOrientation(  :,:,1) )
+      rotateMat = transpose( u%BladeRootMotion(k)%Orientation(  :,:,1) )
+      rotateMat = matmul( rotateMat, u%BladeRootMotion(k)%RefOrientation(  :,:,1) )
       orientation = transpose(rotateMat)
 
       rotateMat(1,1) = rotateMat(1,1) - 1.0_ReKi
       rotateMat(2,2) = rotateMat(2,2) - 1.0_ReKi
       rotateMat(3,3) = rotateMat(3,3) - 1.0_ReKi
 
-      do j=1,AD%u(1)%BladeMotion(k)%nnodes
-         position = AD%u(1)%BladeMotion(k)%Position(:,j)
-         AD%u(1)%BladeMotion(k)%TranslationDisp(:,j) = matmul( rotateMat, position ) + HubPos
+      do j=1,u%BladeMotion(k)%nnodes
+         position = u%BladeMotion(k)%Position(:,j)
+         u%BladeMotion(k)%TranslationDisp(:,j) = matmul( rotateMat, position ) + HubPos
 
-         AD%u(1)%BladeMotion(k)%Orientation(  :,:,j) = matmul( AD%u(1)%BladeMotion(k)%RefOrientation(:,:,j), orientation )
+         u%BladeMotion(k)%Orientation(  :,:,j) = matmul( u%BladeMotion(k)%RefOrientation(:,:,j), orientation )
 
-         position =  AD%u(1)%BladeMotion(k)%Position(:,j) + AD%u(1)%BladeMotion(k)%TranslationDisp(:,j) &
-            - AD%u(1)%HubMotion%Position(:,1) - AD%u(1)%HubMotion%TranslationDisp(:,1) ! BM%Position will always be from origin, so we don't need to subtract HM%Position
-            
-         rotVel_cross_offset = cross_product( AD%u(1)%HubMotion%RotationVel(:,1), position )
-         rotAcc_cross_offset = cross_product( AD%u(1)%HubMotion%RotationAcc(:,1), position )
-         AD%u(1)%BladeMotion(k)%TranslationVel( :,j) = rotVel_cross_offset + hubVel ! add hub vel because hub can have a linear velocity
-         AD%u(1)%BladeMotion(k)%TranslationAcc( :,j) = rotAcc_cross_offset + rotVel_cross_offset + hubAcc
+         position =  u%BladeMotion(k)%Position(:,j) + u%BladeMotion(k)%TranslationDisp(:,j) &
+            - u%HubMotion%Position(:,1) - u%HubMotion%TranslationDisp(:,1) 
+         
+         rotVel_cross_offset = cross_product( u%HubMotion%RotationVel(:,1), position )
+         rotAcc_cross_offset = cross_product( u%HubMotion%RotationAcc(:,1), position )
+         u%BladeMotion(k)%TranslationVel( :,j) = rotVel_cross_offset + hubVel ! add hub vel because hub can have a linear velocity
+         u%BladeMotion(k)%TranslationAcc( :,j) = rotAcc_cross_offset + rotVel_cross_offset + hubAcc
 
       end do !j=nnodes
 
    end do !k=numBlades
 
-   ! @dustin: note, I took out code that sets the blade node inflows which usually goes here. I did this because we're setting it
-   ! through an outside source (ProteusDS) and the outside source can't know where the nodes are until
-   ! this subroutine ends. So I introduced a new subroutine to be called during initialization called Set_AD_Inflows
-   end subroutine Set_AD_Inputs
+   end subroutine Set_AD_Inputs_Hub
    
+   !----------------------------------------------------------------------------------------------------------------------------------
+   !> this routine cycles values in the input array AD%InputTime and AD%u.
+   subroutine Advance_AD_InputWindow(AD,errStat,errMsg)
+
+   type(AeroDyn_Data),                 intent(inout) :: AD            ! AeroDyn data
+   integer(IntKi),                     intent(  out) :: errStat       ! Status of error message
+   character(*),                       intent(  out) :: errMsg        ! Error message if ErrStat /= ErrID_None
+
+   ! local variables
+   integer(IntKi)                              :: errStat2      ! local status of error message
+   character(ErrMsgLen)                        :: errMsg2       ! local error message if ErrStat /= ErrID_None
+   character(*), parameter                     :: RoutineName = 'Advance_AD_InputWindow'
+
+   integer(intKi)                              :: j             ! loop counter inputs
+
+
+   errStat = ErrID_None
+   errMsg  = ""
+   
+   !................
+   ! shift previous calculations:
+   !................
+   do j = numInp-1,1,-1
+      call AD_CopyInput (AD%u(j),  AD%u(j+1),  MESH_UPDATECOPY, ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2,ErrMsg2,ErrStat,ErrMsg,RoutineName)
+
+      AD%InputTime(j+1) = AD%InputTime(j)
+   end do
+
+   end subroutine Advance_AD_InputWindow
    
    !---------------------------------------------------------------------------------------------------------------------------------
-   !> djc: I took the code that sets the inflows out of Set_AD_Inputs because Set_AD_Inputs is called from the
-   !! Init_Aerodyn subroutine, and we don't know the number of blades and nodes until that subroutine is done.
-   !! So we wait for it to be done, allow PDS to get the number of nodes and blades, allocate inflows accordingly,
-   !! get the node positions, and then initialize the inflows using this subroutine
-   !! Must be called directly after all calls to Set_AD_Inputs.
-   !! Refer to normal Aerodyn_Driver's Set_AD_Inputs to see how I'm trying to keep the end result the same after taking
+   !> Refer to normal Aerodyn_Driver's Set_AD_Inputs_and_Advance_Window to see how I'm trying to keep the end result the same after taking
    !! set inflows out of that subroutine
-   SUBROUTINE Init_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
+   SUBROUTINE Init_AD_Inputs_Inflow(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
       type(AeroDyn_Data),                       intent(inout) :: AD
       integer(IntKi),                              intent(in) :: nBlades, nNodes
       real(R8Ki), dimension(3,nNodes, nBlades), intent(in) :: bladeNodeInflowVel
@@ -537,19 +549,15 @@
          enddo !k=nblades
       enddo !i=numInp
 
-   END SUBROUTINE Init_AD_Inflows
+   END SUBROUTINE Init_AD_Inputs_Inflow
 
    !------------------------------------------------------------------------------------------------------------------------------
-   !> djc: I took this out of Set_AD_Inputs because Set_AD_Inputs is called from the Init_Aerodyn
-   !! subroutine, and we don't know the number of blades and nodes until that subroutine is done.
-   !! So we wait for it to be done, allow PDS to get the number of nodes and blades, allocate inflows accordingly,
-   !! get the node positions, and then initialize the inflows using this subroutine
-   !! Must be called directly after all calls to Set_AD_Inputs.
-   SUBROUTINE Set_AD_Inflows(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
+   !> TODO comment this
+   SUBROUTINE Set_AD_Inputs_Inflow(AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
       type(AeroDyn_Data),                       intent(inout)  :: AD
-      integer(IntKi),                              intent(in)  :: nBlades, nNodes
-      real(ReKi), dimension(3,nNodes, nBlades), intent(in) :: bladeNodeInflowVel
-      real(ReKi), dimension(3,nNodes, nBlades), intent(in) :: bladeNodeInflowAcc
+      integer(IntKi),                           intent(in   )  :: nBlades, nNodes
+      real(ReKi), dimension(3,nNodes, nBlades), intent(in   )  :: bladeNodeInflowVel
+      real(ReKi), dimension(3,nNodes, nBlades), intent(in   )  :: bladeNodeInflowAcc
 
       integer(IntKi) :: j, k
 
@@ -560,8 +568,10 @@
          enddo !j=nnodes
       enddo !k=nblades
 
-   END SUBROUTINE Set_AD_Inflows
+   END SUBROUTINE Set_AD_Inputs_Inflow
 
+   !----------------------------------------------------------------------------------------------------------------------------
+   !>
    subroutine ValidateInputs(DvrData, errStat, errMsg)
 
    type(Dvr_SimData),             intent(in)    :: DvrData

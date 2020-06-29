@@ -16,12 +16,20 @@
    implicit none
 
    public :: Interface_Init
-   public :: Interface_InitInflows
-   public :: Interface_SetInflows
-   public :: Interface_SetHubMotion
+   public :: Interface_InitInputs_Inflow
+   public :: Interface_SetInputs_Inflow
+   public :: Interface_SetInputs_Hub
    public :: Interface_GetBladeNodePos
    public :: Interface_UpdateStates
    public :: Interface_End
+   
+   type, private :: SimInstance
+      type(AeroDyn_Data)                 :: AD
+      type(AeroDyn_Data)                 :: AD_fake  ! Instance of AeorDyn's states for a fake update which won't affect AD
+      type(Dvr_SimData)                  :: DvrData
+      logical(kind=C_BOOL)               :: ADInstance_Initialized
+
+   end type SimInstance
 
    Contains
 
@@ -32,11 +40,11 @@
       hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,numBlades,bladePitch,hubRadius,precone,nNodes,turbineDiameter,errStat,errMsg)
    type(AeroDyn_Data),                 intent(inout) :: AD
    type(Dvr_SimData),                  intent(inout) :: DvrData
-   logical,                            intent(inout) :: AD_Initialized
+   logical(kind=C_BOOL),               intent(inout) :: AD_Initialized
    character(*),                       intent(in   ) :: AD_inputFile
    character(*),                       intent(in   ) :: AD_outputFile
    real(C_DOUBLE),                     intent(in   ) :: timestep
-   logical,                            intent(in   ) :: useAddedMass
+   logical(kind=C_BOOL),               intent(in   ) :: useAddedMass
    real(C_DOUBLE),                     intent(in   ) :: fluidDensity
    real(C_DOUBLE),                     intent(in   ) :: kinematicFluidVisc
    real(C_DOUBLE), dimension(1:3),     intent(in   ) :: hubPos
@@ -126,7 +134,7 @@
    END SUBROUTINE Interface_Init
 
    !------------------------------------------------------------------------------------------------------------------------------
-   !> Needed to seperate Set_AD_Input from couple subroutine, because this sets the hubstate for the next timestep,
+   !> Needed to seperate Set_AD_Inputs from couple subroutine, because this sets the hubstate for the next timestep,
    !! and once we do that, we can get the node positions of that time, which PDS can use to get new inflows, and
    !! finally we can call the coupling subroutine to set the inflows and do the timestep from
    SUBROUTINE Interface_SetHubMotion(AD, DvrData, time, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch)
@@ -148,7 +156,7 @@
 
       dbTime = time
       ! Moves current input information in u(1) to u(2) and then updates u(1) with these hub states.
-      call Set_AD_Inputs(dbTime, DvrData, AD, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch, errStat, errMsg)
+      call Set_AD_Inputs_and_Advance_Window(dbTime, DvrData, AD, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch, errStat, errMsg)
 
    END SUBROUTINE Interface_SetHubMotion
 
@@ -178,8 +186,8 @@
 
    !-----------------------------------------------------------------------------------------------------------------------------------------
    !> Brings simulation from t_i to t_(i+1), where t_i is the end of the last time-step, and t_(i+1) is the time passed to
-   !! Interface_SetHubMotion. Returns the force and moment on the hub at t_(i+1). Note, AD_Step_SetHubstate is
-   !! expected to be called before this subroutine.
+   !! Interface_SetHubMotion. Returns the force and moment on the hub at t_(i+1). Note, the inputs are expected to be set
+   !! before this subroutine is called.
    SUBROUTINE Interface_UpdateStates(AD, DvrData, isPermanent, force, moment, power, tsr, massMatrix, addedMassMatrix, errStat, errMsg)
    ! include these specific indices used to index into the output array so we can return these values to the calling subroutine
    use AeroDyn_IO, only: RtAeroPwr, RtAeroFxh, RtAeroFyh, RtAeroFzh, RtAeroMxh, RtAeroMyh, RtAeroMzh, RtTSR
@@ -447,7 +455,7 @@
    FUNCTION NeedToAbort(ErrStat) result(abort)
    integer(IntKi),         intent(in) :: ErrStat              ! Status of error message
 
-   logical                            :: abort
+   logical                          :: abort
 
    abort = .false.
 
@@ -484,6 +492,7 @@
 
    call AD_Dvr_DestroyAeroDyn_Data( AD, ErrStat2, ErrMsg2 )
    call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   
 
    if (ErrStat >= AbortErrLev) then
       !CALL ProgAbort( 'AeroDyn Driver encountered simulation error level: '&
