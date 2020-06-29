@@ -246,6 +246,7 @@
 
       if ( isRealStep ) then
          call Advance_AD_InputWindow(v%AD, errStat, errMsg)
+         v%DvrData%iADStep = v%DvrData%iADStep + 1 ! @djc: try advancing the counter here (it seems to make logical sense to do it here)
       else 
          ! I'm actually not sure we'll ever need to do this... Get rid of it if not
          call Advance_AD_InputWindow(v%AD_fake, errStat, errMsg)
@@ -351,10 +352,6 @@
    integer(IntKi),                          intent(  out)   :: errStat              ! Status of error message
    character(ErrMsgLen),                    intent(  out)   :: errMsg               ! Error message if ErrStat /= ErrID_None
 
-
-   real(DbKi)                 :: dt_total ! variable to hold the dt since last input time
-   real(DbKi)                 :: time_ad ! The current time of the states
-
    ! loop counters
    integer(IntKi) 	::	i
    integer(IntKi) 	::	j
@@ -381,53 +378,20 @@
    !.............................
    ! Update states from t_i to t_(i+1)
 
-   ! calculate the time that Aerodyn's internal states are at
-   time_ad = DvrData%iADStep * DvrData%dt
+   ! Then call UpdateStates to bring the states from "time" to "time + dt"
+   call AD_UpdateStates(AD%InputTime(2), DvrData%iADstep, AD%u, AD%InputTime, AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%m, errStat2, errMsg2 )
+   call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
 
-   ! calculate the timestep taken by the calling function, which is t_(i+1) - t_i
-   dt_total = AD%InputTime(1) - time_ad
+   ! Use the input and states at t_(i+1) to calculate the output at t_(i+1)
+   call AD_CalcOutput( AD%InputTime(1), AD%u(1), AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%y, AD%m, errStat2, errMsg2 )
+   call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
 
-   ! if the time-step is larger than AeroDyn's dt, then we break it down into substeps of Aerodyn's dt
-   if(dt_total >= (DvrData%dt - epsilon)) then
-      ! Adding epsilon so that floating point truncation error won't prevent a substep from happening
-      nSubSteps = (dt_total + epsilon) / DvrData%dt
-
-      do i = 1, nSubSteps
-
-         ! Then call UpdateStates to bring the states from "time" to "time + dt"
-         ! @djc: currently using a custom version of UpdateStates that recalculates the orientations and blade node positions rather than interpolating
-         call AD_UpdateStates_Custom(time_ad, DvrData%iADstep, AD%u, AD%InputTime, AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%m, errStat2, errMsg2 )
-         call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-
-         ! Update the time to reflect what time the current states represent
-         time_ad = time_ad + DvrData%dt
-
-         ! Advance step counter (only if this is a real step)
-         if ( isPermanent ) then
-            DvrData%iADStep = DvrData%iADStep + 1
-         endif
-
-         ! Use the input and states at t_(i+1) to calculate the output at t_(i+1)
-         call AD_CalcOutput( time_ad, AD%u(1), AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%y, AD%m, errStat2, errMsg2 )
-         call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-
-         ! If this is a permanent call to simulate then we want to write the results to the output file
-         if ( isPermanent ) then
-            ! Write the output for t_(i+1) to the output file
-            call Dvr_WriteOutputLine(DvrData%OutFileData, time_ad, AD%y%WriteOutput, errStat2, errMsg2)
-            call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-         endif
-      end do
-
-      ! if there's a remainder of time left, then too bad, we just stop here
-   else 
-
-      ! do nothing and then AD_CalcOuput will return the outputs at the last timestep 
-   endif 
-   
-   ! @djc Currently the added mass isn't working because we still need to get the acceleration as the nodes to calculate the added mass
-   ! and then we have to figure out how to do the iterative solve to actually get the added mass force right
-   !call CalcAddedMassMatrix(addedMassMatrix, AD%m, AD%p)
+   ! If this is a permanent call to simulate then we want to write the results to the output file
+   if ( isPermanent ) then
+      ! Write the output for t_(i+1) to the output file
+      call Dvr_WriteOutputLine(DvrData%OutFileData, AD%InputTime(1), AD%y%WriteOutput, errStat2, errMsg2)
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   endif
 
    !..................................
    ! Calculate outputs at t_(i+1)
@@ -458,6 +422,7 @@
 
    power = AD%m%AllOuts( RtAeroPwr )
    tsr = AD%m%AllOuts (RtTSR)
+   
    END SUBROUTINE Interface_UpdateStates
 
    END SUBROUTINE Interface_UpdateStates_C

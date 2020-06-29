@@ -571,7 +571,7 @@
    END SUBROUTINE Set_AD_Inputs_Inflow
 
    !----------------------------------------------------------------------------------------------------------------------------
-   !>
+   !> TODO comment this
    subroutine ValidateInputs(DvrData, errStat, errMsg)
 
    type(Dvr_SimData),             intent(in)    :: DvrData
@@ -609,6 +609,7 @@
 
 
    end subroutine ValidateInputs
+   
    !----------------------------------------------------------------------------------------------------------------------------------
    subroutine Dvr_WriteOutputLine(OutFileData, t, output, errStat, errMsg)
 
