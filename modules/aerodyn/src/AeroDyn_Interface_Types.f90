@@ -73,6 +73,7 @@ IMPLICIT NONE
     TYPE(AD_InputType) , DIMENSION(numInp)  :: u      !< Array of system inputs [-]
     TYPE(AD_OutputType)  :: y      !< System outputs [-]
     REAL(DbKi) , DIMENSION(numInp)  :: InputTime      !< Array of times associated with u array [-]
+    INTEGER(IntKi)  :: stepNum      !<  [-]
   END TYPE AeroDyn_Data
 ! =======================
 ! =========  Dvr_SimData  =======
@@ -84,7 +85,6 @@ IMPLICIT NONE
     REAL(ReKi)  :: ShftTilt      !< Shaft tilt angle [rad]
     REAL(ReKi)  :: Precone      !< Precone angle (all blades) [rad]
     TYPE(Dvr_OutputFile)  :: OutFileData      !< data for driver output file [-]
-    INTEGER(IntKi)  :: iADstep      !< time step number of AeroDyn [-]
     REAL(DbKi)  :: dt      !< Time-step that Aerodyn will take [s]
   END TYPE Dvr_SimData
 ! =======================
@@ -691,6 +691,7 @@ ENDIF
          CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg,RoutineName)
          IF (ErrStat>=AbortErrLev) RETURN
     DstAeroDyn_DataData%InputTime = SrcAeroDyn_DataData%InputTime
+    DstAeroDyn_DataData%stepNum = SrcAeroDyn_DataData%stepNum
  END SUBROUTINE AD_Dvr_CopyAeroDyn_Data
 
  SUBROUTINE AD_Dvr_DestroyAeroDyn_Data( AeroDyn_DataData, ErrStat, ErrMsg )
@@ -889,6 +890,7 @@ ENDDO
          DEALLOCATE(Int_Buf)
       END IF
       Db_BufSz   = Db_BufSz   + SIZE(InData%InputTime)  ! InputTime
+      Int_BufSz  = Int_BufSz  + 1  ! stepNum
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -1144,6 +1146,8 @@ ENDDO
       ENDIF
       DbKiBuf ( Db_Xferred:Db_Xferred+(SIZE(InData%InputTime))-1 ) = PACK(InData%InputTime,.TRUE.)
       Db_Xferred   = Db_Xferred   + SIZE(InData%InputTime)
+      IntKiBuf ( Int_Xferred:Int_Xferred+(1)-1 ) = InData%stepNum
+      Int_Xferred   = Int_Xferred   + 1
  END SUBROUTINE AD_Dvr_PackAeroDyn_Data
 
  SUBROUTINE AD_Dvr_UnPackAeroDyn_Data( ReKiBuf, DbKiBuf, IntKiBuf, Outdata, ErrStat, ErrMsg )
@@ -1514,6 +1518,8 @@ ENDDO
       OutData%InputTime = UNPACK(DbKiBuf( Db_Xferred:Db_Xferred+(SIZE(OutData%InputTime))-1 ), mask1, 0.0_DbKi )
       Db_Xferred   = Db_Xferred   + SIZE(OutData%InputTime)
     DEALLOCATE(mask1)
+      OutData%stepNum = IntKiBuf( Int_Xferred ) 
+      Int_Xferred   = Int_Xferred + 1
  END SUBROUTINE AD_Dvr_UnPackAeroDyn_Data
 
  SUBROUTINE AD_Dvr_CopyDvr_SimData( SrcDvr_SimDataData, DstDvr_SimDataData, CtrlCode, ErrStat, ErrMsg )
@@ -1539,7 +1545,6 @@ ENDDO
       CALL AD_Dvr_Copydvr_outputfile( SrcDvr_SimDataData%OutFileData, DstDvr_SimDataData%OutFileData, CtrlCode, ErrStat2, ErrMsg2 )
          CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg,RoutineName)
          IF (ErrStat>=AbortErrLev) RETURN
-    DstDvr_SimDataData%iADstep = SrcDvr_SimDataData%iADstep
     DstDvr_SimDataData%dt = SrcDvr_SimDataData%dt
  END SUBROUTINE AD_Dvr_CopyDvr_SimData
 
@@ -1614,7 +1619,6 @@ ENDDO
          Int_BufSz = Int_BufSz + SIZE( Int_Buf )
          DEALLOCATE(Int_Buf)
       END IF
-      Int_BufSz  = Int_BufSz  + 1  ! iADstep
       Db_BufSz   = Db_BufSz   + 1  ! dt
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
@@ -1685,8 +1689,6 @@ ENDDO
       ELSE
         IntKiBuf( Int_Xferred ) = 0; Int_Xferred = Int_Xferred + 1
       ENDIF
-      IntKiBuf ( Int_Xferred:Int_Xferred+(1)-1 ) = InData%iADstep
-      Int_Xferred   = Int_Xferred   + 1
       DbKiBuf ( Db_Xferred:Db_Xferred+(1)-1 ) = InData%dt
       Db_Xferred   = Db_Xferred   + 1
  END SUBROUTINE AD_Dvr_PackDvr_SimData
@@ -1777,8 +1779,6 @@ ENDDO
       IF(ALLOCATED(Re_Buf )) DEALLOCATE(Re_Buf )
       IF(ALLOCATED(Db_Buf )) DEALLOCATE(Db_Buf )
       IF(ALLOCATED(Int_Buf)) DEALLOCATE(Int_Buf)
-      OutData%iADstep = IntKiBuf( Int_Xferred ) 
-      Int_Xferred   = Int_Xferred + 1
       OutData%dt = DbKiBuf( Db_Xferred ) 
       Db_Xferred   = Db_Xferred + 1
  END SUBROUTINE AD_Dvr_UnPackDvr_SimData

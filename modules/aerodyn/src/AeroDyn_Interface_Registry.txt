@@ -46,6 +46,7 @@ typedef   ^                         ^             AD_ParameterType       p      
 typedef   ^                         ^             AD_InputType           u              {numInp} -     -   "Array of system inputs"
 typedef   ^                         ^             AD_OutputType          y                -      -     -   "System outputs"
 typedef   ^                         ^             DbKi                   InputTime      {numInp} -     -   "Array of times associated with u array"
+typedef	  ^							^			  INTEGER                stepNum		  -		 -	   -   ""
 
 
 #
@@ -58,6 +59,5 @@ typedef   ^                         ^            ReKi                    ShftTil
 typedef   ^                         ^            ReKi                    Precone          -      -     -   "Precone angle (all blades)" "rad"
 typedef   ^                         ^            Dvr_OutputFile          OutFileData      -      -     -   "data for driver output file" "-"
 #typedef  ^                         ^            AeroDyn_Data            AD               -      -     -   "data for the AeroDyn module"
-typedef   ^                         ^            IntKi                   iADstep          -      -     -   "time step number of AeroDyn" "-"
 typedef   ^                         ^			 DbKi	                 dt               -      -     -   "Time-step that Aerodyn will take" "s"                                                                                                      
 

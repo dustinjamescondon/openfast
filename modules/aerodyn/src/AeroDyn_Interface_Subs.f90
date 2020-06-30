@@ -198,19 +198,21 @@
 
    ! we know exact values, so we're going to initialize inputs this way (instead of using the input guesses from AD_Init)
    AD%InputTime = -999
+   AD%stepNum = -1
    DO j = -numInp, -1
       !extrapOri = hubOri - (hubRotVel * (dt * j) ) ! this won't work with all orientations
       extrapOri(:,:) = ExtrapOrientationFromRotVel(hubOri, hubRotVel, dt * j)
       time = dt * j
-      call Set_AD_Inputs_Hub(time,DvrData,AD%u(1),hubPos,extrapOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
-         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
       call Advance_AD_InputWindow(AD, errStat2, errMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+         
+      AD%InputTime(1) = time
+
+      call Set_AD_Inputs_Hub(time,DvrData,AD%u(1),hubPos,extrapOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
          call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
 
    END DO
    
-   DvrData%iADStep = -1
-
    ! @djc TODO where should we actually set these?
    AD%p%IncludeAddedMass = useAddedMass
    AD%p%CaBlade = 1.0_ReKi
@@ -417,7 +419,7 @@
    !................
    ! calculate new values
    !................
-   
+      
    ! Tower motions:
    do j=1,u%TowerMotion%nnodes
       u%TowerMotion%Orientation(  :,:,j) = u%TowerMotion%RefOrientation(:,:,j) ! identity
@@ -440,7 +442,6 @@
    ! i.e. not change position upon rotation - we just set this to zero.
    u%HubMotion%TranslationDisp(:,1) = 0.0
 
-
    ! Rather than pass the Euler angles we pass the orientation matrix itself
    ! Note that HubMotion's orientation needs to be global to local, and our parameter
    ! is local to global, so we do the transpose here
@@ -452,7 +453,6 @@
 
    u%HubMotion%TranslationVel(:,1) = hubVel
    u%HubMotion%TranslationAcc(:,1) = hubAcc
-
 
    ! Blade root motions:
 
