@@ -198,7 +198,7 @@
 
    ! we know exact values, so we're going to initialize inputs this way (instead of using the input guesses from AD_Init)
    AD%InputTime = -999
-   AD%stepNum = -1
+   AD%stepNum = -1 ! TODO confirm this part is right: do we want the step number to be on 0 once initialization is done?
    DO j = -numInp, -1
       !extrapOri = hubOri - (hubRotVel * (dt * j) ) ! this won't work with all orientations
       extrapOri(:,:) = ExtrapOrientationFromRotVel(hubOri, hubRotVel, dt * j)
@@ -383,6 +383,7 @@
          call Calc_AD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
       end select
    end subroutine Perturb_AD_u
+   
    
    !----------------------------------------------------------------------------------------------------------------------------------
    !> This overwrites the first input in 
