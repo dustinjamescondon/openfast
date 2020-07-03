@@ -257,16 +257,16 @@
    !----------------------------------------------------------------------------------------------------------------------------------
    !< AeroDyn (with added mass) has two inputs that are accelerations and are therefore part of the direct feedthrough problem: linear acceleration
    !< and angular acceleration, and both have 3 components; therefore, there are 6 inputs to perturb in total
-   subroutine Interface_SetInputs_HubAcceleration( simInsAddr, isRealStep, linearAcc, rotationAcc ), BIND(C, NAME='INTERFACE_SETINPUTS_HUBACCELERATION')
-      !DEC$ ATTRIBUTES DLLEXPORT::Interface_CalcOutput_C
-      !GCC$ ATTRIBUTES DLLEXPORT::Interface_CalcOutput_C
+   subroutine Interface_SetInputs_HubAcceleration( simInsAddr, isRealStep, linearAcc, rotationAcc ) BIND(C, NAME='INTERFACE_SETINPUTS_HUBACCELERATION')
+      !DEC$ ATTRIBUTES DLLEXPORT::Interface_SetInputs_HubAcceleration
+      !GCC$ ATTRIBUTES DLLEXPORT::Interface_SetInputs_HubAcceleration
       use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
    !..................................................................................................................................
       type(C_PTR), value,             intent(in   )   :: simInsAddr
       type(SimInstance), pointer                      :: v
       logical(kind=C_BOOL),           intent(in   )   :: isRealStep
-      real(R8Ki),         intent(in   ) :: linearAcc    !< Hub's linear acceleration
-      real(R8Ki),         intent(in   ) :: rotationAcc  !< Hub's rotational acceleration (axis-angle vector)
+      real(C_DOUBLE),         intent(in   ) :: linearAcc(3)    !< Hub's linear acceleration
+      real(C_DOUBLE),         intent(in   ) :: rotationAcc(3)  !< Hub's rotational acceleration (axis-angle vector)
       
       call C_F_POINTER(simInsAddr, v)
       
@@ -276,7 +276,7 @@
          call Calc_AD_NodeKinematics(linearAcc, rotationAcc, v%AD_fake%u(1), v%DvrData)
       endif 
 
-   end subroutine Set_Inputs_HubAcceleration
+   end subroutine Interface_SetInputs_HubAcceleration
    
    !----------------------------------------------------------------------------------
    !< 
