@@ -115,7 +115,7 @@ EXTERN node_t Domain ;
 EXTERN char t1[NAMELEN], t2[NAMELEN], t3[NAMELEN], t4[NAMELEN], t5[NAMELEN], t6[NAMELEN] ;
 EXTERN char thiscom[NAMELEN] ;
 
-EXTERN int max_time_level  ;  /* Maximum number of time levels of any state variable */
+EXTERN int max_time_level  ;  /* Maximum number of time_act levels of any state variable */
 
 #define MAXINCLDIRS 50 
 EXTERN int   nincldirs ;

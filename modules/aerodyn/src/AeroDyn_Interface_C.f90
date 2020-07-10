@@ -13,12 +13,12 @@
    
    type, private :: SimInstance
       type(AeroDyn_Data)                 :: AD
-      type(AeroDyn_Data)                 :: AD_fake  ! Instance of AeorDyn's states for a fake update which won't affect AD
+      type(AeroDyn_Data)                 :: AD_saved ! Calling Interface_SaveCurrentStates does this: "AD_saved = AD"
       type(Dvr_SimData)                  :: DvrData
       logical(kind=C_BOOL)               :: ADInstance_Initialized
 
    end type SimInstance
-   
+      
    CONTAINS
 
    !---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -102,7 +102,6 @@
    
       simIns%AD%p%IncludeAddedMass = useAddedMass
 
-
       ! Initialize the main output file
       call Dvr_InitializeOutputFile( simIns%DvrData%OutFileData, errStat, errMsg)
       CALL SetErrStat( ErrStat, ErrMsg, ErrStat_out, ErrMsg_out, RoutineName )   ! update error list if applicable
@@ -119,8 +118,9 @@
          return 
       endif
       
-      call AD_Dvr_CopyAeroDyn_Data(simIns%AD, simIns%AD_fake, MESH_NEWCOPY, ErrStat, ErrMsg)
-      
+      ! Allocate and initialize our saved AeroDyn states
+      call AD_Dvr_CopyAeroDyn_Data(simIns%AD, simIns%AD_saved, MESH_NEWCOPY, ErrStat, ErrMsg)
+
       contains
       function CalcTurbineDiameter(AD,nNodes) result(turbineDiameter)
          type(AeroDyn_Data), intent(in) :: AD
@@ -160,9 +160,47 @@
 
    END SUBROUTINE Interface_InitInputs_Inflow_C
    
+   !SUBROUTINE Interface_SaveCurrentStates(simInsAddr, statePtr_out) BIND(C, NAME="INTERFACE_SAVECURRENTADSTATES")
+   
    
    !---------------------------------------------------------------------------------------------------------------------------------------------------------------
-   SUBROUTINE Interface_SetInputs_Hub_C(simInsAddr, isRealStep, time, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch) BIND(C, NAME='INTERFACE_SETINPUTS_HUB')
+   SUBROUTINE Interface_SaveCurrentStates(simInsAddr) BIND(C, NAME="INTERFACE_SAVECURRENTSTATES")
+      !DEC$ ATTRIBUTES DLLEXPORT::Interface_SaveCurrentStates
+      !GCC$ ATTRIBUTES DLLEXPORT::Interface_SaveCurrentStates
+      
+      use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
+      
+      type(C_PTR),   value,               intent(in) :: simInsAddr
+      type(SimInstance), pointer                 :: v
+      
+      integer(IntKi)             :: ErrStat  ! Status of error message
+      character(ErrMsgLen)	      :: ErrMsg	! Error message if ErrStat /= ErrID_None
+      
+      call C_F_POINTER(simInsAddr, v)
+      call AD_Dvr_CopyAeroDyn_Data(v%AD, v%AD_saved, MESH_UPDATECOPY, ErrStat, ErrMsg)
+
+   END SUBROUTINE Interface_SaveCurrentStates
+
+   !---------------------------------------------------------------------------------------------------------------------------------------------------------------
+   SUBROUTINE Interface_RestoreSavedStates(simInsAddr) BIND(C, NAME="INTERFACE_RESTORESAVEDSTATES")
+      !DEC$ ATTRIBUTES DLLEXPORT::Interface_RestoreSavedStates
+      !GCC$ ATTRIBUTES DLLEXPORT::Interface_RestoreSavedStates
+      
+      use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
+      
+      type(C_PTR),   value,               intent(in) :: simInsAddr
+      type(SimInstance), pointer                 :: v
+      
+      integer(IntKi)             :: ErrStat  ! Status of error message
+      character(ErrMsgLen)	      :: ErrMsg	! Error message if ErrStat /= ErrID_None
+      
+      call C_F_POINTER(simInsAddr, v)
+      call AD_Dvr_CopyAeroDyn_Data(v%AD_saved, v%AD, MESH_UPDATECOPY, ErrStat, ErrMsg)
+
+   END SUBROUTINE Interface_RestoreSavedStates
+   
+   !---------------------------------------------------------------------------------------------------------------------------------------------------------------
+   SUBROUTINE Interface_SetInputs_Hub_C(simInsAddr, time, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch) BIND(C, NAME='INTERFACE_SETINPUTS_HUB')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_SetInputs_Hub_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_SetInputs_Hub_C
 
@@ -171,7 +209,6 @@
 
       type(C_PTR),   value,               intent(in) :: simInsAddr
       type(SimInstance), pointer                 :: v
-      logical(kind=C_BOOL),               intent(in) :: isRealStep
       real(C_DOUBLE),	                  intent(in) :: time              ! time of these inputs
       real(C_DOUBLE), dimension(1:3),     intent(in) :: hubPos
       real(C_DOUBLE), dimension(1:3,1:3), intent(in) :: hubOri
@@ -185,70 +222,46 @@
       
       call C_F_POINTER(simInsAddr, v)
       
-      if ( isRealStep ) then
-         call Interface_Advance_InputWindow_C(simInsAddr, isRealStep)
-         call Set_AD_Inputs_Hub(real(time, kind=DbKi),v%DvrData,v%AD%u(1),hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
-         v%AD%InputTime(1) = v%AD%stepNum * v%DvrData%dt
-      else
-         ! Copy all of our real AD states into the fake one. 
-         ! Note: MESH_UPDATECOPY means that the fake instance is assumed to already be allocated, and so the fields are just being set according
-         !        to what's in v%AD
-         call AD_Dvr_CopyAeroDyn_Data(v%AD, v%AD_fake, MESH_UPDATECOPY, ErrStat, ErrMsg)
-         call Interface_Advance_InputWindow_C(simInsAddr, isRealStep)
-         call Set_AD_Inputs_Hub(real(time, kind=DbKi),v%DvrData,v%AD_fake%u(1),hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
-         v%AD_fake%InputTime(1) = v%AD_fake%stepNum * v%DvrData%dt
-      endif 
+      call Set_AD_Inputs_Hub(real(time, kind=DbKi),v%DvrData,v%AD%u(1),hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
+      v%AD%InputTime(1) = v%AD%stepNum * v%DvrData%dt
          
    END SUBROUTINE Interface_SetInputs_Hub_C
    
    !----------------------------------------------------------------------------------
    !> 
-   SUBROUTINE Interface_SetInputs_Inflow_C(simInsAddr, isRealStep, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc) BIND(C, NAME='INTERFACE_SETINPUTS_INFLOW')
+   SUBROUTINE Interface_SetInputs_Inflow_C(simInsAddr, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc) BIND(C, NAME='INTERFACE_SETINPUTS_INFLOW')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_SetInputs_Inflow_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_SetInputs_Inflow_C
       use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
 
       type(C_PTR),   value,                     intent(in)    :: simInsAddr
       type(SimInstance), pointer                              :: v
-      logical(kind=C_BOOL),                     intent(in)    :: isRealStep
       integer(C_INT),                           intent(in)    :: nBlades, nNodes
       real(C_DOUBLE), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflowVel
       real(C_DOUBLE), dimension(3,nNodes,nBlades),  intent(in)    :: bladeNodeInflowAcc
 
       call C_F_POINTER(simInsAddr, v)
             
-      if ( isRealStep ) then
-         call Set_AD_Inputs_Inflow(v%AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
-      else 
-         call Set_AD_Inputs_Inflow(v%AD_fake, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc) 
-      endif
+      call Set_AD_Inputs_Inflow(v%AD, nBlades, nNodes, bladeNodeInflowVel, bladeNodeInflowAcc)
+
    END SUBROUTINE Interface_SetInputs_Inflow_C
       
    !----------------------------------------------------------------------------------
    !> 
-   SUBROUTINE Interface_Advance_InputWindow_C(simInsAddr, isRealStep) BIND(C, NAME='INTERFACE_ADVANCE_INPUTWINDOW')
+   SUBROUTINE Interface_Advance_InputWindow_C(simInsAddr) BIND(C, NAME='INTERFACE_ADVANCE_INPUTWINDOW')
       !DEC$ ATTRIBUTES DLLEXPORT:: Interface_Advance_InputWindow_C
       !GCC$ ATTRIBUTES DLLEXPORT:: Interface_Advance_InputWindow_C
       use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
 
       type(C_PTR),   value,                     intent(in   ) :: simInsAddr
       type(SimInstance), pointer                              :: v
-      logical(kind=C_BOOL),                     intent(in   ) :: isRealStep
       
       integer(IntKi)             :: ErrStat  ! Status of error message
       character(ErrMsgLen)	      :: ErrMsg	! Error message if ErrStat /= ErrID_None
 
       call C_F_POINTER(simInsAddr, v)
 
-      if ( isRealStep ) then
-         call Advance_AD_InputWindow(v%AD, errStat, errMsg)
-         v%AD%stepNum = v%AD%stepNum + 1 ! @djc: try advancing the counter here (it seems to make logical sense to do it here)
-      else 
-         ! I'm actually not sure we'll ever need to do this... Get rid of it if not
-         call Advance_AD_InputWindow(v%AD_fake, errStat, errMsg)
-         v%AD_fake%stepNum = v%AD_fake%stepNum + 1 ! @djc: try advancing the counter here (it seems to make logical sense to do it here)
-
-      endif
+      call Advance_AD_InputWindow(v%AD, errStat, errMsg)
       
       ! TODO do error checking
       
@@ -257,30 +270,25 @@
    !----------------------------------------------------------------------------------------------------------------------------------
    !< AeroDyn (with added mass) has two inputs that are accelerations and are therefore part of the direct feedthrough problem: linear acceleration
    !< and angular acceleration, and both have 3 components; therefore, there are 6 inputs to perturb in total
-   subroutine Interface_SetInputs_HubAcceleration( simInsAddr, isRealStep, linearAcc, rotationAcc ) BIND(C, NAME='INTERFACE_SETINPUTS_HUBACCELERATION')
+   subroutine Interface_SetInputs_HubAcceleration( simInsAddr, linearAcc, rotationAcc ) BIND(C, NAME='INTERFACE_SETINPUTS_HUBACCELERATION')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_SetInputs_HubAcceleration
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_SetInputs_HubAcceleration
       use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
    !..................................................................................................................................
       type(C_PTR), value,             intent(in   )   :: simInsAddr
       type(SimInstance), pointer                      :: v
-      logical(kind=C_BOOL),           intent(in   )   :: isRealStep
       real(C_DOUBLE),         intent(in   ) :: linearAcc(3)    !< Hub's linear acceleration
       real(C_DOUBLE),         intent(in   ) :: rotationAcc(3)  !< Hub's rotational acceleration (axis-angle vector)
       
       call C_F_POINTER(simInsAddr, v)
       
-      if ( isRealStep ) then
-         call Calc_AD_NodeKinematics(linearAcc, rotationAcc, v%AD%u(1), v%DvrData)
-      else
-         call Calc_AD_NodeKinematics(linearAcc, rotationAcc, v%AD_fake%u(1), v%DvrData)
-      endif 
+      call Calc_AD_NodeKinematics(linearAcc, rotationAcc, v%AD%u(1), v%DvrData)
 
    end subroutine Interface_SetInputs_HubAcceleration
    
    !----------------------------------------------------------------------------------
    !< 
-   SUBROUTINE Interface_CalcOutput_C(simInsAddr, isRealStep, force, moment) BIND(C, NAME='INTERFACE_CALCOUTPUT')
+   SUBROUTINE Interface_CalcOutput_C(simInsAddr, force, moment, power, tsr) BIND(C, NAME='INTERFACE_CALCOUTPUT')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_CalcOutput_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_CalcOutput_C
       use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_DOUBLE
@@ -289,85 +297,82 @@
       
       type(C_PTR), value,             intent(in   )   :: simInsAddr
       type(SimInstance), pointer                      :: v
-      logical(kind=C_BOOL),           intent(in   )   :: isRealStep
       real(C_DOUBLE), dimension(1:3), intent(  out)	:: force     ! 3D force (Fx, Fy, Fz)
       real(C_DOUBLE), dimension(1:3), intent(  out)   :: moment    ! moment (Mx, My, Mz) at rotor hub
+      real(C_DOUBLE),                 intent(  out)   :: power
+      real(C_DOUBLE),                 intent(  out)   :: tsr
+
       
       real(DbKi)                                  :: time_ad
-      integer(IntKi)             :: ErrStat  ! Status of error message
+      integer(IntKi)             :: ErrStat  ! Status of error message 
       character(ErrMsgLen)	      :: ErrMsg	! Error message if ErrStat /= ErrID_None
       
       call C_F_POINTER(simInsAddr, v)
             
-      if ( isRealStep ) then
-         time_ad = v%AD%stepNum * v%DvrData%dt
 
-         ! This will update the AllOuts in the main AeroDyn output states
-         call AD_CalcOutput( time_ad, v%AD%u(1), v%AD%p, v%AD%x, v%AD%xd, v%AD%z, v%AD%OtherState, v%AD%y, v%AD%m, errStat, errMsg )
-         
-         ! So then set the output arguments accordingly
-         force(1) =  v%AD%m%AllOuts( RtAeroFxh )
-         force(2) =  v%AD%m%AllOuts( RtAeroFyh )
-         force(3) =  v%AD%m%AllOuts( RtAeroFzh )
-                  
-         moment(1) = v%AD%m%AllOuts( RtAeroMxh )
-         moment(2) = v%AD%m%AllOuts( RtAeroMyh )
-         moment(3) = v%AD%m%AllOuts( RtAeroMzh )
-      else 
-         time_ad = v%AD_fake%stepNum * v%DvrData%dt
-         
-         ! This will update the AllOuts in the  AeroDyn output states
-         call AD_CalcOutput( time_ad, v%AD_fake%u(1), v%AD_fake%p, v%AD_fake%x, v%AD_fake%xd, v%AD_fake%z, v%AD_fake%OtherState, v%AD_fake%y, v%AD_fake%m, errStat, errMsg )
-         
-         ! So then set the output arguments accordingly
-         force(1) =  v%AD_fake%m%AllOuts( RtAeroFxh )
-         force(2) =  v%AD_fake%m%AllOuts( RtAeroFyh )
-         force(3) =  v%AD_fake%m%AllOuts( RtAeroFzh )
-                  
-         moment(1) = v%AD_fake%m%AllOuts( RtAeroMxh )
-         moment(2) = v%AD_fake%m%AllOuts( RtAeroMyh )
-         moment(3) = v%AD_fake%m%AllOuts( RtAeroMzh )
-      endif
+      time_ad = v%AD%stepNum * v%DvrData%dt
+
+      ! This will update the AllOuts in the main AeroDyn output states
+      call AD_CalcOutput( time_ad, v%AD%u(1), v%AD%p, v%AD%x(STATE_PRED), v%AD%xd(STATE_PRED),&
+         v%AD%z(STATE_PRED), v%AD%OtherState(STATE_PRED), v%AD%y, v%AD%m, errStat, errMsg )
+
+      ! So then set the output arguments accordingly
+      force(1) =  v%AD%m%AllOuts( RtAeroFxh )
+      force(2) =  v%AD%m%AllOuts( RtAeroFyh )
+      force(3) =  v%AD%m%AllOuts( RtAeroFzh )
+
+      moment(1) = v%AD%m%AllOuts( RtAeroMxh )
+      moment(2) = v%AD%m%AllOuts( RtAeroMyh )
+      moment(3) = v%AD%m%AllOuts( RtAeroMzh )
+      
+      power = v%AD%m%AllOuts( RtAeroPwr )
+      tsr = v%AD%m%AllOuts (RtTSR)
       
    END SUBROUTINE Interface_CalcOutput_C
    
+   !-------------------------------------------------------------------------------------------------------
+   !> 
+   SUBROUTINE Interface_CopyStates_Pred_to_Curr(simInsAddr) BIND(C, NAME='INTERFACE_COPYSTATES_PRED_TO_CURR')
+      !DEC$ ATTRIBUTES DLLEXPORT::Interface_CopyStates_Pred_to_Curr
+      !GCC$ ATTRIBUTES DLLEXPORT::Interface_CopyStates_Pred_to_Curr
+      type(C_PTR), value,             intent(in   )   :: simInsAddr
+      type(SimInstance), pointer                      :: v
+      integer(IntKi)             :: ErrStat2  ! Status of error message
+      character(ErrMsgLen)	      :: ErrMsg2	! Error message if ErrStat /= ErrID_None
+
+      call C_F_POINTER(simInsAddr, v)
+      
+      ! Copy current states to pred states
+      CALL AD_CopyContState   (v%AD%x( STATE_PRED), v%AD%x( STATE_CURR), MESH_UPDATECOPY, Errstat2, ErrMsg2)
+      !   CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      CALL AD_CopyDiscState   (v%AD%xd(STATE_PRED), v%AD%xd(STATE_CURR), MESH_UPDATECOPY, Errstat2, ErrMsg2)  
+      !   CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      CALL AD_CopyConstrState (v%AD%z( STATE_PRED), v%AD%z( STATE_CURR), MESH_UPDATECOPY, Errstat2, ErrMsg2)
+      !   CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      CALL AD_CopyOtherState( v%AD%OtherState(STATE_PRED), v%AD%OtherState(STATE_CURR), MESH_UPDATECOPY, Errstat2, ErrMsg2)
+      !   CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   END SUBROUTINE Interface_CopyStates_Pred_to_Curr
+   
    !---------------------------------------------------------------------------------------------------------------------------------------------------------------
-   SUBROUTINE Interface_UpdateStates_C(simInsAddr, isRealStep, force, moment, power, tsr) BIND(C, NAME='INTERFACE_UPDATESTATES')
+   !> TODO remove the "contains" subroutine indirection. Only added this because of "isRealStep" but now I've removed it
+   SUBROUTINE Interface_UpdateStates_C(simInsAddr) BIND(C, NAME='INTERFACE_UPDATESTATES')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_UpdateStates_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_UpdateStates_C
 
       type(C_PTR), value,             intent(in   )      :: simInsAddr
       type(SimInstance), pointer                      :: v
-      logical(kind=C_BOOL),           intent(in   )      :: isRealStep
-      real(C_DOUBLE), dimension(1:3), intent(  out)	   :: force     ! 3D force (Fx, Fy, Fz)
-      real(C_DOUBLE), dimension(1:3), intent(  out)      :: moment    ! moment (Mx, My, Mz) at rotor hub
-      real(C_DOUBLE),                 intent(  out)      :: power     ! power
-      real(C_DOUBLE),                 intent(  out)      :: tsr       ! tip-speed ratio
 
       integer(IntKi)		        :: errStat  ! Status of error message
       character(ErrMsgLen)	     :: errMsg   ! Error message if ErrStat /= ErrID_None
 
       call C_F_POINTER(simInsAddr, v)
       
-      if ( isRealStep ) then
-         call Interface_UpdateStates(v%AD, v%DvrData, isRealStep, force, moment, power, tsr, errStat, errMsg)
-      else 
-         call Interface_UpdateStates(v%AD_fake, v%DvrData, isRealStep, force, moment, power, tsr, errStat, errMsg)
-      endif 
+      call Interface_UpdateStates(v%AD, errStat, errMsg)
       
    contains    
-   SUBROUTINE Interface_UpdateStates(AD, DvrData, isPermanent, force, moment, power, tsr, errStat, errMsg)
-   ! include these specific indices used to index into the output array so we can return these values to the calling subroutine
-   use AeroDyn_IO, only: RtAeroPwr, RtAeroFxh, RtAeroFyh, RtAeroFzh, RtAeroMxh, RtAeroMyh, RtAeroMzh, RtTSR
+   SUBROUTINE Interface_UpdateStates(AD, errStat, errMsg)
 
    type(AeroDyn_Data),             intent(inout) :: AD
-   type(Dvr_SimData),              intent(inout) :: DvrData
-   logical(C_BOOL), intent(in)                              :: isPermanent       ! If true, results will be written to output file, and step number will be incremented. If false, neither will happen.
-
-   real(C_DOUBLE), dimension(1:3),          intent(  out)	:: force     ! 3D force (Fx, Fy, Fz)
-   real(C_DOUBLE), dimension(1:3),          intent(  out)   :: moment    ! moment (Mx, My, Mz) at rotor hub
-   real(C_DOUBLE),                          intent(  out)   :: power     ! power
-   real(C_DOUBLE),                          intent(  out)   :: tsr       ! tip-speed ratio
 
    integer(IntKi),                          intent(  out)   :: errStat              ! Status of error message
    character(ErrMsgLen),                    intent(  out)   :: errMsg               ! Error message if ErrStat /= ErrID_None
@@ -376,8 +381,6 @@
    integer(IntKi) 	::	i
    integer(IntKi) 	::	j
    integer(IntKi) 	::	k
-
-   integer(IntKi)  :: nSubSteps
 
    real(ReKi)                                  :: theta(3)
    real(ReKi)                                  :: position(3)
@@ -394,67 +397,55 @@
    errMsg      = ''
       
    ! SEE ED_AllocOutput in ElastoDyn.f90 for examples of setting up meshes for rotor
-
+   
+   ! Copy current states to pred states
+   CALL AD_CopyContState   (AD%x( STATE_CURR), AD%x( STATE_PRED), MESH_UPDATECOPY, Errstat2, ErrMsg2)
+      CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL AD_CopyDiscState   (AD%xd(STATE_CURR), AD%xd(STATE_PRED), MESH_UPDATECOPY, Errstat2, ErrMsg2)  
+      CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL AD_CopyConstrState (AD%z( STATE_CURR), AD%z( STATE_PRED), MESH_UPDATECOPY, Errstat2, ErrMsg2)
+      CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL AD_CopyOtherState( AD%OtherState(STATE_CURR), AD%OtherState(STATE_PRED), MESH_UPDATECOPY, Errstat2, ErrMsg2)
+      CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
    !.............................
    ! Update states from t_i to t_(i+1)
 
    ! Then call UpdateStates to bring the states from "time" to "time + dt"
-   call AD_UpdateStates(AD%InputTime(2), AD%stepNum, AD%u, AD%InputTime, AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%m, errStat2, errMsg2 )
+   call AD_UpdateStates(AD%InputTime(2), AD%stepNum, AD%u, AD%InputTime, AD%p, AD%x(STATE_PRED), &
+      AD%xd(STATE_PRED), AD%z(STATE_PRED), AD%OtherState(STATE_PRED), AD%m, errStat2, errMsg2 )
    call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-
-   ! Use the input and states at t_(i+1) to calculate the output at t_(i+1)
-   call AD_CalcOutput( AD%InputTime(1), AD%u(1), AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%y, AD%m, errStat2, errMsg2 )
-   call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-
-   ! If this is a permanent call to simulate then we want to write the results to the output file
-   if ( isPermanent ) then
-      ! Write the output for t_(i+1) to the output file
-      call Dvr_WriteOutputLine(DvrData%OutFileData, AD%InputTime(1), AD%y%WriteOutput, errStat2, errMsg2)
-      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-   endif
-
-   !..................................
-   ! Calculate outputs at t_(i+1)
-
-   ! @djc: usually would be in this order, with these inputs
-   !
-   !  calculate the output given by inputs at prev time
-   !call AD_CalcOutput( time, AD%u(2), AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%y, AD%m, errStat2, errMsg2 )
-   !call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-   !
-   !  write the ouputs at prev time to the output file
-   !call Dvr_WriteOutputLine(DvrData%OutFileData, time, AD%y%WriteOutput, errStat2, errMsg2)
-   !call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-   !
-   !  update states from prev time to current time
-   !call AD_UpdateStates( time , DvrData%iADstep, AD%u, AD%InputTime, AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%m, errStat2, errMsg2 )
-   !call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
-
-   ! return the hub force and moment in the hub coordinate system back to the calling function
-   force(1) = AD%m%AllOuts( RtAeroFxh )
-   force(2) = AD%m%AllOuts( RtAeroFyh )
-   force(3) = AD%m%AllOuts( RtAeroFzh )
-
-   moment(1) = AD%m%AllOuts( RtAeroMxh )
-   moment(2) = AD%m%AllOuts( RtAeroMyh )
-   moment(3) = AD%m%AllOuts( RtAeroMzh )
-
-   power = AD%m%AllOuts( RtAeroPwr )
-   tsr = AD%m%AllOuts (RtTSR)
    
    END SUBROUTINE Interface_UpdateStates
 
    END SUBROUTINE Interface_UpdateStates_C
 
    !---------------------------------------------------------------------------------------------------------------------------------------------------------------
-   SUBROUTINE Interface_GetBladeNodePos_C(simInsAddr, isRealStep, nodePos) BIND(C, NAME='INTERFACE_GETBLADENODEPOS')
+   !> 
+   SUBROUTINE Interface_WriteOutputLine(simInsAddr) BIND(C, NAME='INTERFACE_WRITEOUTPUTLINE')
+   !DEC$ ATTRIBUTES DLLEXPORT::Interface_WriteOutputLine
+   !GCC$ ATTRIBUTES DLLEXPORT::Interface_WriteOutputLine
+   type(C_PTR), value,             intent(in   )      :: simInsAddr
+   type(SimInstance), pointer                      :: v
+   
+   integer(IntKi) :: ErrStat
+   character(ErrMsgLen) :: ErrMsg
+   
+      call C_F_POINTER(simInsAddr, v)
+   
+      call Dvr_WriteOutputLine(v%DvrData%OutFileData, v%AD%InputTime(1), v%AD%y%WriteOutput, errStat, errMsg)
+      !call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   
+   END SUBROUTINE Interface_WriteOutputLine
+   
+   !---------------------------------------------------------------------------------------------------------------------------------------------------------------
+   !> TODO remove the "contains" subroutine indirection. Only added this because of "isRealStep" but now I've removed it   
+   SUBROUTINE Interface_GetBladeNodePos_C(simInsAddr, nodePos) BIND(C, NAME='INTERFACE_GETBLADENODEPOS')
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_GetBladeNodePos_C
       !GCC$ ATTRIBUTES DLLEXPORT::Interface_GetBladeNodePos_C
       use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
 
       type(C_PTR),     intent(in ), value           :: simInsAddr
       type(SimInstance), pointer                    :: v
-      logical(kind=C_BOOL),           intent(in   ) :: isRealStep
       real(C_DOUBLE), dimension(1:*), intent(  out) :: nodePos	! variable for outgoing node positions
 
       integer(C_INT)                              :: errStat   ! Status of error message
@@ -462,12 +453,8 @@
 
       call C_F_POINTER(simInsAddr, v)
       
-      if ( isRealStep ) then 
-         ! Access AD internals and calculate positions, passing array reference backwards
-         call Interface_GetBladeNodePos(v%AD, v%DvrData, nodePos)
-      else 
-         call Interface_GetBladeNodePos(v%AD_fake, v%DvrData, nodePos)
-      endif    
+      ! Access AD internals and calculate positions, passing array reference backwards
+      call Interface_GetBladeNodePos(v%AD, v%DvrData, nodePos)
    
    contains
       ! gets the node coordinates of all the blade nodes from AeroDyn
@@ -492,7 +479,7 @@
 
          nodePos = AD%u(1)%BladeMotion(k)%Position(:,j) + AD%u(1)%BladeMotion(k)%TranslationDisp(:,j)
 
-         bladeNodePos(curIndex+1) = nodePos(1)  ! and these are the even more absolute locations?
+         bladeNodePos(curIndex+1) = nodePos(1)
          bladeNodePos(curIndex+2) = nodePos(2)
          bladeNodePos(curIndex+3) = nodePos(3)
 
@@ -524,8 +511,9 @@
           ! Close the output file
          if (v%DvrData%OutFileData%unOutFile > 0) close(v%DvrData%OutFileData%unOutFile)
 
-         if ( v%ADInstance_Initialized ) then	! (?)
-            call AD_End( v%AD%u(1), v%AD%p, V%AD%x, v%AD%xd, v%AD%z, v%AD%OtherState, v%AD%y, v%AD%m, errStat, errMsg )
+         if ( v%ADInstance_Initialized ) then	! (?) Do we need to call AD_End? Doesn't AD_Dvr_DestroyDvr_SimData do all we need?
+            ! TODO confirm that we don't need to call this (comment out for now)
+            ! AD_End( v%AD%u(1), v%AD%p, V%AD%x(STATE_CURR), v%AD%xd(STATE_CURR), v%AD%z(STATE_CURR), v%AD%OtherState(STATE_CURR), v%AD%y, v%AD%m, errStat, errMsg )
                !call SetErrStat( errStat, errMsg, errStat_out, errMsg_out, RoutineName )
          end if
 
@@ -535,7 +523,7 @@
          call AD_Dvr_DestroyAeroDyn_Data( v%AD, ErrStat, ErrMsg )
             !call SetErrStat( errStat, errMsg, errStat_out, errMsg_out, RoutineName )
    
-         call AD_Dvr_DestroyAeroDyn_Data( v%AD_fake, ErrStat, ErrMsg )
+         call AD_Dvr_DestroyAeroDyn_Data( v%AD_saved, ErrStat, ErrMsg )
             !call SetErrStat( errStat, errMsg, errStat_out, errMsg_out, RoutineName )
 
 

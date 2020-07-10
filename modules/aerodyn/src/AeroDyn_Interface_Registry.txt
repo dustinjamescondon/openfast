@@ -37,10 +37,10 @@ typedef   ^                         ^             character(ChanLen)     WriteOu
 #
 # ..... AeroDyn data .......................................................................................................
 param     ^                         -             INTEGER                numInp           -      2     -   "Usually, order of interpolation for input-output extrap (not used in driver)"
-typedef   ^                         AeroDyn_Data  AD_ContinuousStateType x                -      -     -   "Continuous states"
-typedef   ^                         ^             AD_DiscreteStateType   xd               -      -     -   "Discrete states"
-typedef   ^                         ^             AD_ConstraintStateType z                -      -     -   "Constraint states"
-typedef   ^                         ^             AD_OtherStateType      OtherState       -      -     -   "Other states"
+typedef   ^                         AeroDyn_Data  AD_ContinuousStateType x               {2}      -     -   "Continuous states"
+typedef   ^                         ^             AD_DiscreteStateType   xd              {2}      -     -   "Discrete states"
+typedef   ^                         ^             AD_ConstraintStateType z               {2}      -     -   "Constraint states"
+typedef   ^                         ^             AD_OtherStateType      OtherState      {2}      -     -   "Other states"
 typedef   ^                         ^             AD_MiscVarType         m                -      -     -   "misc/optimization variables"
 typedef   ^                         ^             AD_ParameterType       p                -      -     -   "Parameters"
 typedef   ^                         ^             AD_InputType           u              {numInp} -     -   "Array of system inputs"

@@ -26,6 +26,10 @@
    use VersionInfo
 
    implicit none
+   
+   ! state array indexes
+   INTEGER(IntKi), PARAMETER :: STATE_CURR              = 1          !< index for "current" (t_global) states
+   INTEGER(IntKi), PARAMETER :: STATE_PRED              = 2          !< index for "predicted" (t_global_next) states
 
    TYPE(ProgDesc), PARAMETER   :: version   = ProgDesc( 'AeroDyn_Interface_Subs', '', '' )  ! The version number of this program.
    
@@ -183,8 +187,17 @@
    end do
 
    ! Initialize AeroDyn
-   call AD_Init(InitInData, AD%u(1), AD%p, AD%x, AD%xd, AD%z, AD%OtherState, AD%y, AD%m, dt, InitOutData, ErrStat2, ErrMsg2 )
+   call AD_Init(InitInData, AD%u(1), AD%p, AD%x(STATE_CURR), AD%xd(STATE_CURR), AD%z(STATE_CURR), AD%OtherState(STATE_CURR), AD%y, AD%m, dt, InitOutData, ErrStat2, ErrMsg2 )
    call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   
+   CALL AD_CopyContState   (AD%x( STATE_CURR), AD%x( STATE_PRED), MESH_NEWCOPY, Errstat2, ErrMsg2)
+      CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL AD_CopyDiscState   (AD%xd(STATE_CURR), AD%xd(STATE_PRED), MESH_NEWCOPY, Errstat2, ErrMsg2)  
+      CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL AD_CopyConstrState (AD%z( STATE_CURR), AD%z( STATE_PRED), MESH_NEWCOPY, Errstat2, ErrMsg2)
+      CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL AD_CopyOtherState( AD%OtherState(STATE_CURR), AD%OtherState(STATE_PRED), MESH_NEWCOPY, Errstat2, ErrMsg2)
+      CALL SetErrStat( Errstat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
 
    do j = 2, numInp
       call AD_CopyInput (AD%u(1),  AD%u(j),  MESH_NEWCOPY, errStat2, errMsg2)
@@ -525,6 +538,8 @@
 
       AD%InputTime(j+1) = AD%InputTime(j)
    end do
+   
+   AD%stepNum = AD%stepNum + 1
 
    end subroutine Advance_AD_InputWindow
    
