@@ -223,7 +223,7 @@
       call C_F_POINTER(simInsAddr, v)
       
       call Set_AD_Inputs_Hub(real(time, kind=DbKi),v%DvrData,v%AD%u(1),hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
-      v%AD%InputTime(1) = v%AD%stepNum * v%DvrData%dt
+      v%AD%InputTime(1) = real(time, kind=DbKi)
          
    END SUBROUTINE Interface_SetInputs_Hub_C
    
@@ -440,8 +440,8 @@
    !---------------------------------------------------------------------------------------------------------------------------------------------------------------
    !> TODO remove the "contains" subroutine indirection. Only added this because of "isRealStep" but now I've removed it   
    SUBROUTINE Interface_GetBladeNodePos_C(simInsAddr, nodePos) BIND(C, NAME='INTERFACE_GETBLADENODEPOS')
-      !DEC$ ATTRIBUTES DLLEXPORT::Interface_GetBladeNodePos_C
-      !GCC$ ATTRIBUTES DLLEXPORT::Interface_GetBladeNodePos_C
+   !DEC$ ATTRIBUTES DLLEXPORT::Interface_GetBladeNodePos_C
+   !GCC$ ATTRIBUTES DLLEXPORT::Interface_GetBladeNodePos_C
       use, intrinsic :: ISO_C_BINDING, ONLY: C_PTR, C_F_POINTER
 
       type(C_PTR),     intent(in ), value           :: simInsAddr

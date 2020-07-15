@@ -211,7 +211,7 @@
 
    ! we know exact values, so we're going to initialize inputs this way (instead of using the input guesses from AD_Init)
    AD%InputTime = -999
-   AD%stepNum = -1 ! TODO confirm this part is right: do we want the step number to be on 0 once initialization is done?
+   AD%stepNum = -2 ! TODO confirm this part is right: do we want the step number to be on -1 once initialization is done?
    DO j = -numInp, -1
       !extrapOri = hubOri - (hubRotVel * (dt * j) ) ! this won't work with all orientations
       extrapOri(:,:) = ExtrapOrientationFromRotVel(hubOri, hubRotVel, dt * j)
@@ -225,6 +225,9 @@
          call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
 
    END DO
+
+   ! We move the input window so that nstep 0 is ready for Set_Inputs
+   call Advance_AD_InputWindow(AD, errstat2, errmsg2)
    
    ! @djc TODO where should we actually set these?
    AD%p%IncludeAddedMass = useAddedMass
