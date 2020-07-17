@@ -27,7 +27,7 @@
    !! inflows are set from an outside source, and that source needs to know the number of blades
    !! and nodes before sending inflows. Therefore, inflows must be set after this via initInflows
    !! once we know the number of nodes and blades.
-   subroutine Interface_InitAeroDyn_C(AD_inputFile,inputFile_len,AD_outputFile,outputFile_len,timestep,useAddedMass,fluidDensity,kinematicFluidVisc,&
+   subroutine Interface_InitAeroDyn_C(AD_inputFile,inputFile_len,AD_outputFile,outputFile_len,timestep,useAddedMass,coeffAddedMass,fluidDensity,kinematicFluidVisc,&
       hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,nBlades,bladePitch,hubRadius,precone,nNodes,turbineDiameter,instancePtr,&
       errStat_out, errMsg_out) !BIND(C, NAME="INTERFACE_INITAERODYN")
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_InitAerodyn_C
@@ -41,6 +41,7 @@
       character(outputFile_len, kind=C_CHAR), intent(in   )  :: AD_outputFile
       real(C_DOUBLE),                      intent(in   )  :: timestep
       logical(kind=C_BOOL),                intent(in   )  :: useAddedMass
+      real(C_DOUBLE),                      intent(in   )  :: coeffAddedMass ! coefficient of added mass (only used when useAddedMass=true)
       real(C_DOUBLE),                      intent(in   )  :: fluidDensity
       real(C_DOUBLE),                      intent(in   )  :: kinematicFluidVisc
       real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubPos
@@ -84,7 +85,8 @@
       ! Initialize AeroDyn
       ! Set the Initialization input data for AeroDyn based on the Driver input file data, and initialize AD
       ! (this also initializes inputs to AD for first time step)
-      call Init_AeroDyn(simIns%DvrData,simIns%AD,hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,simIns%DvrData%dt,useAddedMass,errStat, errMsg)
+      call Init_AeroDyn(simIns%DvrData,simIns%AD,hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch,simIns%DvrData%dt,useAddedMass,&
+         real(coeffAddedMass, kind=DbKi),errStat, errMsg)
       CALL SetErrStat( ErrStat, ErrMsg, ErrStat_out, ErrMsg_out, RoutineName )   ! update error list if applicable
       if( NeedToAbort(ErrStat) ) then
          return
@@ -99,8 +101,6 @@
       simIns%ADInstance_Initialized = .true.
 
       nNodes = simIns%AD%p%NumBlNds   
-   
-      simIns%AD%p%IncludeAddedMass = useAddedMass
 
       ! Initialize the main output file
       call Dvr_InitializeOutputFile( simIns%DvrData%OutFileData, errStat, errMsg)

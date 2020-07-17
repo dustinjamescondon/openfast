@@ -105,7 +105,7 @@
 
 
    !----------------------------------------------------------------------------------------------------------------------------------
-   subroutine Init_AeroDyn(DvrData, AD, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch, dt, useAddedMass, errStat, errMsg)
+   subroutine Init_AeroDyn(DvrData, AD, hubPos, hubOri, hubVel, hubAcc, hubRotVel, hubRotAcc, bladePitch, dt, useAddedMass, coeffAddedMass, errStat, errMsg)
 
    type(Dvr_SimData),              intent(inout) :: DvrData       ! Input data for initialization
    type(AeroDyn_Data),             intent(inout) :: AD            ! AeroDyn data
@@ -117,7 +117,8 @@
    real(R8Ki), dimension(1:3),     intent(in   ) :: hubRotAcc
    real(R8Ki),                     intent(in   ) :: bladePitch
    real(DbKi),                     intent(inout) :: dt
-   logical(kind=C_BOOL),                        intent(in   ) :: useAddedMass
+   logical(kind=C_BOOL),           intent(in   ) :: useAddedMass
+   real(DbKi),                     intent(in   ) :: coeffAddedMass
    integer(IntKi),                 intent(  out) :: errStat       ! Status of error message
    character(*),                   intent(  out) :: errMsg        ! Error message if ErrStat /= ErrID_None
 
@@ -230,9 +231,8 @@
    ! We move the input window so that nstep 0 is ready for Set_Inputs
    call Advance_AD_InputWindow(AD, errstat2, errmsg2)
    
-   ! @djc TODO where should we actually set these?
    AD%p%IncludeAddedMass = useAddedMass
-   AD%p%CaBlade = 1.0_ReKi ! TODO have this set by subroutine argument
+   AD%p%CaBlade = coeffAddedMass
    
    ! move AD initOut data to AD Driver
    call move_alloc( InitOutData%WriteOutputHdr, DvrData%OutFileData%WriteOutputHdr )
