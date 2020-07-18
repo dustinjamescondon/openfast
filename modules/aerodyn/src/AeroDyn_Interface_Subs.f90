@@ -211,9 +211,10 @@
 
    ! we know exact values, so we're going to initialize inputs this way (instead of using the input guesses from AD_Init)
    AD%InputTime = -999
-   AD%stepNum = -2 ! TODO confirm this part is right: do we want the step number to be on -1 once initialization is done?
-   DO j = -numInp, -1
-      !extrapOri = hubOri - (hubRotVel * (dt * j) ) ! this won't work with all orientations
+   AD%stepNum = -2 ! TODO confirm this is right: We want the step number to be on -1 once initialization is done?
+   !  an orientation matrix for roll according to rotvel and time
+   ! and multiply this on LHS by orientation at t=0
+   DO j = -numInp + 1, -1
       extrapOri(:,:) = ExtrapOrientationFromRotVel(hubOri, hubRotVel, dt * j)
       time = dt * j
       call Advance_AD_InputWindow(AD, errStat2, errMsg2)
@@ -231,7 +232,7 @@
    
    ! @djc TODO where should we actually set these?
    AD%p%IncludeAddedMass = useAddedMass
-   AD%p%CaBlade = 1.0_ReKi
+   AD%p%CaBlade = 1.0_ReKi ! TODO have this set by subroutine argument
    
    ! move AD initOut data to AD Driver
    call move_alloc( InitOutData%WriteOutputHdr, DvrData%OutFileData%WriteOutputHdr )
@@ -242,63 +243,26 @@
    contains
 
    function ExtrapOrientationFromRotVel(orientation, rotVel, time) result(orientation_prime)
+   use NWTC_Num, only : EulerExtract
       real(R8Ki), dimension(1:3,1:3), intent(in) :: orientation ! the global to local orientation matrix
       real(R8Ki), dimension(1:3),     intent(in) :: rotVel ! rotational velocity in axis-angle form
       real(DbKi),                     intent(in) :: time   ! time to extrapolate to
 
+      real(ReKi), dimension(1:3)             :: theta
       real(ReKi), dimension(1:3)             :: theta_prime
       real(R8Ki), dimension(1:3,1:3)         :: orientation_prime
+      real(ReKi), dimension(1:3,1:3)         :: active_roll_matrix
       real(R8Ki), dimension(1:3)             :: xBase, yBase, zBase, xBase_prime, yBase_prime, zBase_prime
       real(DbKi), dimension(1:3)             :: rotVel_x_time
 
-      ! if time == 0, then just return the passed euler angles
-      if( EqualRealNos(time, 0.0_DbKi) ) then
-         orientation_prime = orientation
-         return
-      end if
-
-      ! calculate and save this because we use it more than once
-      rotVel_x_time = rotVel * time
-
-      ! extract the basis vectors
-      ! The matrix is global to local, so the rows are the body's basis vectors in global frame of reference
-      xBase(:) = orientation(:,1)
-      yBase(:) = orientation(:,2)
-      zBase(:) = orientation(:,3)
-
-      ! rotation each basis vector using rotation velocity
-      xBase_prime = RotateVector(xBase, rotVel_x_time)
-      yBase_prime = RotateVector(yBase, rotVel_x_time)
-      zBase_prime = RotateVector(zBase, rotvel_x_time)
-
-      ! create new orientation matrix from the rotated bases
-      orientation_prime(:,1) = xBase_prime(:)
-      orientation_prime(:,2) = yBase_prime(:)
-      orientation_prime(:,3) = zBase_prime(:)
+      ! Just assume that its going to rotate about the hub's x axis
+      theta(1) = sqrt(dot_product(rotVel, rotVel)) * time
+      theta(2) = 0_ReKi
+      theta(3) = 0_ReKi
+      active_roll_matrix(:,:) = transpose(EulerConstruct(theta))
+      orientation_prime = orientation * active_roll_matrix
       
    end function ExtrapOrientationFromRotVel
-
-   !> Implements Rodrigues' rotation formula
-   function RotateVector(v, e) result(vprime)
-   real(R8Ki), dimension(1:3), intent(in) :: v ! vector to rotate
-   real(DbKi), dimension(1:3), intent(in) :: e ! scaled axis vector
-
-   real(DbKi)                             :: theta
-   real(ReKi), dimension(1:3)             :: e_hat
-   real(ReKi), dimension(1:3)             :: vprime
-
-   theta = norm2(e) ! magnatude of e
-   
-   ! to avoid division by zero
-   if( EqualRealNos(theta, 0.0_DbKi) ) then
-      vprime = v
-      return
-   end if
-   
-   e_hat = e / theta ! normalized axis
-
-   vprime = cos(theta) * v + sin(theta) * cross_product(e_hat, v) * (1 - cos(theta)) * dot_product(e_hat,v) * e_hat
-   end function RotateVector
 
    subroutine cleanup()
    call AD_DestroyInitInput( InitInData, ErrStat2, ErrMsg2 )
@@ -359,50 +323,7 @@
    end subroutine Calc_AD_NodeKinematics
    
    !----------------------------------------------------------------------------------------------------------------------------------
-   !< AeroDyn (with added mass) has two inputs that are accelerations and are therefore part of the direct feedthrough problem: linear acceleration
-   !< and angular acceleration, and both have 3 components; therefore, there are 6 inputs to perturb in total
-   subroutine Perturb_AD_u( n, perturb, u_AD_perturb, DvrData )
-   !..................................................................................................................................
-   integer(IntKi),     intent(in   ) :: n            !< number of array element to use
-   real(ReKi),         intent(in   ) :: perturb      !< The amount the input will be perturbed by
-   type(AD_InputType), intent(inout) :: u_AD_perturb !< AD System inputs
-   type(Dvr_SimData),  intent(inout) :: DvrData      !< Driver data
-   
-   real(ReKi),         dimension(1:3) :: perturbed_vec3
-
-      ! Base the value to be perturbed on the value of n, where 1 <= n <= 6. This makes it possible to use iteration
-      ! when calculating the Jacobian of the residual function for AeroDyn
-      select case( n )
-      case ( 1) ! x component of linear acceleration
-         perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
-         perturbed_vec3(1) = perturbed_vec3(1) + perturb
-         call Calc_AD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
-      case ( 2) ! y component of linear acceleration
-         perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
-         perturbed_vec3(2) = perturbed_vec3(2) + perturb
-         call Calc_AD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
-      case ( 3) ! z component of linear acceleration
-         perturbed_vec3 = u_AD_perturb%HubMotion%TranslationAcc(  :,1)
-         perturbed_vec3(3) = perturbed_vec3(3) + perturb
-         call Calc_AD_NodeKinematics(perturbed_vec3, u_AD_perturb%HubMotion%RotationAcc, u_AD_perturb, DvrData)
-      case ( 4) ! x component of rotational acceleration
-         perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
-         perturbed_vec3(1) = perturbed_vec3(1) + perturb
-         call Calc_AD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
-      case ( 5) ! y component of rotational acceleration
-         perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
-         perturbed_vec3(2) = perturbed_vec3(2) + perturb
-         call Calc_AD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
-      case ( 6) ! z component of rotational acceleration
-         perturbed_vec3 = u_AD_perturb%HubMotion%RotationAcc(  :,1)
-         perturbed_vec3(3) = perturbed_vec3(3) + perturb
-         call Calc_AD_NodeKinematics(u_AD_perturb%HubMotion%TranslationAcc, perturbed_vec3, u_AD_perturb, DvrData)
-      end select
-   end subroutine Perturb_AD_u
-   
-   
-   !----------------------------------------------------------------------------------------------------------------------------------
-   !> This overwrites the first input in 
+   !> TODO use Calc_AD_NodeKinematics here instead of repeating code
    subroutine Set_AD_Inputs_Hub(time,DvrData,u,hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,bladePitch)
 
    real(DbKi),                         intent(in   ) :: time          ! time of the inputs (changed from timestep number because now using variable timestep)
@@ -428,10 +349,6 @@
    real(ReKi)                                  :: orientation(3,3)
    real(ReKi)                                  :: rotateMat(3,3)
    integer(8)                                  :: curIndex
-   real(C_DOUBLE), dimension(3)                :: vec_hold
-   real(C_DOUBLE), dimension(3,3)              :: mat_hold
-   real(DbKi)                                  :: ad_time
-   real(DbKi), parameter                       :: epsilon = 1.0e-6
 
    !................
    ! calculate new values
@@ -444,16 +361,8 @@
       u%TowerMotion%TranslationVel( :,j) = 0.0_ReKi
    end do !j=nnodes
 
-   !.................
-   ! Debug stuff (Visual studio's debugger doesn't display the values of non-local variables sometimes, but assigning them
-   !              to a local variable allows us to see them)
-   vec_hold = u%HubMotion%RotationVel(:,1)
-   mat_hold = u%HubMotion%RefOrientation(:,:,1)
-   !.................
-
    ! Hub motions:
-
-   u%HubMotion%Position(:,1) = HubPos
+   u%HubMotion%Position(:,1) = hubPos
    
    ! This would usually express where the hub is rotated to around the tower. Since we want hub to rotate around its center -
    ! i.e. not change position upon rotation - we just set this to zero.
@@ -495,7 +404,7 @@
 
       do j=1,u%BladeMotion(k)%nnodes
          position = u%BladeMotion(k)%Position(:,j)
-         u%BladeMotion(k)%TranslationDisp(:,j) = matmul( rotateMat, position ) + HubPos
+         u%BladeMotion(k)%TranslationDisp(:,j) = matmul( rotateMat, position ) + u%HubMotion%Position(:,1)
 
          u%BladeMotion(k)%Orientation(  :,:,j) = matmul( u%BladeMotion(k)%RefOrientation(:,:,j), orientation )
 
