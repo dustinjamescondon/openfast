@@ -392,13 +392,6 @@ subroutine AD_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, InitOut
          call Cleanup()
          return
       end if
-   
-      !--------------------------------------------------------------------------------------------
-      ! @djc: Set the added mass flag and coefficient
-      !--------------------------------------------------------------------------------------------
-   InitOut%IncludeAddedMass = InputFileData%IncludeAddedMass
-   InitOut%CaBlade          = InputFileData%CaBlade
-      !--------------------------------------------------------------------------------------------
 
       !............................................................................................
       ! Initialize states and misc vars
@@ -977,6 +970,11 @@ subroutine SetParameters( InitInp, InputFileData, p, ErrStat, ErrMsg )
    p%TwrAero          = InputFileData%TwrAero
    p%CavitCheck       = InputFileData%CavitCheck
    p%Gravity          = InitInp%Gravity
+   !--------------------------------------------------------------------------------------------
+   ! @djc: Set the added mass flag and coefficient
+   !--------------------------------------------------------------------------------------------
+   p%IncludeAddedMass = InitInp%IncludeAddedMass
+   p%CaBlade          = InitInp%CaBlade
   
 
    

@@ -167,6 +167,10 @@
       return
    end if
 
+   ! Must set these because AeroDyn isn't going to read these from a file
+   InitInData%IncludeAddedMass = useAddedMass
+   InitInData%CaBlade = coeffAddedMass
+   
    ! @djc: we will always have the hub position be 0 vector in Aerodyn's view.
    InitInData%HubPosition = 0.0_ReKi
  
@@ -230,9 +234,6 @@
 
    ! We move the input window so that nstep 0 is ready for Set_Inputs
    call Advance_AD_InputWindow(AD, errstat2, errmsg2)
-   
-   AD%p%IncludeAddedMass = useAddedMass
-   AD%p%CaBlade = coeffAddedMass
    
    ! move AD initOut data to AD Driver
    call move_alloc( InitOutData%WriteOutputHdr, DvrData%OutFileData%WriteOutputHdr )

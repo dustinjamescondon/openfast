@@ -48,6 +48,8 @@ IMPLICIT NONE
     REAL(R8Ki) , DIMENSION(1:3,1:3)  :: HubOrientation      !< DCM reference orientation of hub [-]
     REAL(ReKi) , DIMENSION(:,:), ALLOCATABLE  :: BladeRootPosition      !< X-Y-Z reference position of each blade root (3 x NumBlades) [m]
     REAL(R8Ki) , DIMENSION(:,:,:), ALLOCATABLE  :: BladeRootOrientation      !< DCM reference orientation of blade roots (3x3 x NumBlades) [-]
+    LOGICAL  :: IncludeAddedMass      !< Flag that tells us to use added mass. [-]
+    REAL(ReKi)  :: CaBlade      !< Added mass coefficient for the blade. [-]
   END TYPE AD_InitInputType
 ! =======================
 ! =========  AD_BladePropsType  =======
@@ -305,6 +307,8 @@ IF (ALLOCATED(SrcInitInputData%BladeRootOrientation)) THEN
   END IF
     DstInitInputData%BladeRootOrientation = SrcInitInputData%BladeRootOrientation
 ENDIF
+    DstInitInputData%IncludeAddedMass = SrcInitInputData%IncludeAddedMass
+    DstInitInputData%CaBlade = SrcInitInputData%CaBlade
  END SUBROUTINE AD_CopyInitInput
 
  SUBROUTINE AD_DestroyInitInput( InitInputData, ErrStat, ErrMsg )
@@ -376,6 +380,8 @@ ENDIF
     Int_BufSz   = Int_BufSz   + 2*3  ! BladeRootOrientation upper/lower bounds for each dimension
       Db_BufSz   = Db_BufSz   + SIZE(InData%BladeRootOrientation)  ! BladeRootOrientation
   END IF
+      Int_BufSz  = Int_BufSz  + 1  ! IncludeAddedMass
+      Re_BufSz   = Re_BufSz   + 1  ! CaBlade
   IF ( Re_BufSz  .GT. 0 ) THEN 
      ALLOCATE( ReKiBuf(  Re_BufSz  ), STAT=ErrStat2 )
      IF (ErrStat2 /= 0) THEN 
@@ -456,6 +462,10 @@ ENDIF
       IF (SIZE(InData%BladeRootOrientation)>0) DbKiBuf ( Db_Xferred:Db_Xferred+(SIZE(InData%BladeRootOrientation))-1 ) = PACK(InData%BladeRootOrientation,.TRUE.)
       Db_Xferred   = Db_Xferred   + SIZE(InData%BladeRootOrientation)
   END IF
+      IntKiBuf ( Int_Xferred:Int_Xferred+1-1 ) = TRANSFER( InData%IncludeAddedMass , IntKiBuf(1), 1)
+      Int_Xferred   = Int_Xferred   + 1
+      ReKiBuf ( Re_Xferred:Re_Xferred+(1)-1 ) = InData%CaBlade
+      Re_Xferred   = Re_Xferred   + 1
  END SUBROUTINE AD_PackInitInput
 
  SUBROUTINE AD_UnPackInitInput( ReKiBuf, DbKiBuf, IntKiBuf, Outdata, ErrStat, ErrMsg )
@@ -587,6 +597,10 @@ ENDIF
       Db_Xferred   = Db_Xferred   + SIZE(OutData%BladeRootOrientation)
     DEALLOCATE(mask3)
   END IF
+      OutData%IncludeAddedMass = TRANSFER( IntKiBuf( Int_Xferred ), mask0 )
+      Int_Xferred   = Int_Xferred + 1
+      OutData%CaBlade = ReKiBuf( Re_Xferred )
+      Re_Xferred   = Re_Xferred + 1
  END SUBROUTINE AD_UnPackInitInput
 
  SUBROUTINE AD_CopyBladePropsType( SrcBladePropsTypeData, DstBladePropsTypeData, CtrlCode, ErrStat, ErrMsg )

@@ -26,6 +26,8 @@ typedef	^	InitInputType	ReKi	HubPosition	{3}	-	-	"X-Y-Z reference position of hu
 typedef	^	InitInputType	R8Ki	HubOrientation	{3}{3}	-	-	"DCM reference orientation of hub"	-
 typedef	^	InitInputType	ReKi	BladeRootPosition	{:}{:}	-	-	"X-Y-Z reference position of each blade root (3 x NumBlades)"	m
 typedef	^	InitInputType	R8Ki	BladeRootOrientation	{:}{:}{:}	-	-	"DCM reference orientation of blade roots (3x3 x NumBlades)"	-
+typedef	^	InitInputType	Logical	IncludeAddedMass	-	-	-	"Flag that tells us to use added mass."
+typedef ^   InitInputType   ReKi	CaBlade		-	-	-	"Added mass coefficient for the blade."	-
 
 # This is data defined in the Input File for this module (or could otherwise be passed in)
 # ..... Blade Input file data .....................................................................................................
