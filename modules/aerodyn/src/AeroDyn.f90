@@ -1730,7 +1730,7 @@ subroutine ApplyAddedMassForce(u, p, m, y)
    
    do k=1,p%NumBlades
       do j=1,p%NumBlNds
-         rel_acc = u%BladeMotion(k)%TranslationAcc(:,j) - u%InflowOnBlade(:,j,k)
+         rel_acc = u%BladeMotion(k)%TranslationAcc(:,j) - u%InflowAccOnBlade(:,j,k)
             ! (not tested) Added mass force (mass x acceleration) in the blade flapwise direction
          m%FAddedMass(j,k) = dot_product(rel_acc, u%BladeMotion(k)%orientation(1,:,j)) * m%AddedMass(j,k)
          

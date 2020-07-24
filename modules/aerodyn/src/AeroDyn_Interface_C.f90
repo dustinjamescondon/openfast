@@ -95,8 +95,9 @@
       ! Set these parameters from the arguments, which will overwrite what was specified in the input file
       !  Note: Setting these from subroutine arguments makes sense with the coupling because PDS can just set these according to
       !        what its own simulation is using, rather than having to update the AD input file to match them.
-      simIns%AD%p%AirDens = fluidDensity
-      simIns%AD%p%KinVisc = kinematicFluidVisc
+      ! TODO: NOTE I COMMENTED THESE OUT BECAUSE RIGHT NOW I'M ASSUMING THESE ARE SET FROM THE AD INPUT FILE
+      !simIns%AD%p%AirDens = fluidDensity
+      !simIns%AD%p%KinVisc = kinematicFluidVisc
 
       simIns%ADInstance_Initialized = .true.
 
