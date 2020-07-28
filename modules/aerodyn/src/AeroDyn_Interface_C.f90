@@ -27,7 +27,7 @@
    !! inflows are set from an outside source, and that source needs to know the number of blades
    !! and nodes before sending inflows. Therefore, inflows must be set after this via initInflows
    !! once we know the number of nodes and blades.
-   subroutine Interface_InitAeroDyn_C(AD_inputFile,inputFile_len,AD_outputFile,outputFile_len,timestep,useAddedMass,coeffAddedMass,fluidDensity,kinematicFluidVisc,&
+   subroutine Interface_InitAeroDyn_C(AD_inputFile,inputFile_len,AD_outputFile,outputFile_len,timestep,useAddedMass,coeffAddedMass,&
       hubPos,hubOri,hubVel,hubAcc,hubRotVel,hubRotAcc,nBlades,bladePitch,hubRadius,precone,nNodes,turbineDiameter,instancePtr,&
       errStat_out, errMsg_out) !BIND(C, NAME="INTERFACE_INITAERODYN")
       !DEC$ ATTRIBUTES DLLEXPORT::Interface_InitAerodyn_C
@@ -42,8 +42,6 @@
       real(C_DOUBLE),                      intent(in   )  :: timestep
       logical(kind=C_BOOL),                intent(in   )  :: useAddedMass
       real(C_DOUBLE),                      intent(in   )  :: coeffAddedMass ! coefficient of added mass (only used when useAddedMass=true)
-      real(C_DOUBLE),                      intent(in   )  :: fluidDensity
-      real(C_DOUBLE),                      intent(in   )  :: kinematicFluidVisc
       real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubPos
       real(C_DOUBLE), dimension(1:3,1:3),  intent(in   )  :: hubOri ! The hub's global to local orientation matrix
       real(C_DOUBLE), dimension(1:3),      intent(in   )  :: hubVel
@@ -91,13 +89,6 @@
       if( NeedToAbort(ErrStat) ) then
          return
       end if
-   
-      ! Set these parameters from the arguments, which will overwrite what was specified in the input file
-      !  Note: Setting these from subroutine arguments makes sense with the coupling because PDS can just set these according to
-      !        what its own simulation is using, rather than having to update the AD input file to match them.
-      ! TODO: NOTE I COMMENTED THESE OUT BECAUSE RIGHT NOW I'M ASSUMING THESE ARE SET FROM THE AD INPUT FILE
-      !simIns%AD%p%AirDens = fluidDensity
-      !simIns%AD%p%KinVisc = kinematicFluidVisc
 
       simIns%ADInstance_Initialized = .true.
 
