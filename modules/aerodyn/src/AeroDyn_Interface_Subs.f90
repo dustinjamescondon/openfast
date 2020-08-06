@@ -50,7 +50,8 @@
    END FUNCTION NeedToAbort
 
    !----------------------------------------------------------------------------------------------------------------------------------
-   !< TODO comment this
+   !< Initializes and validates the parameters of the simulation through subroutine arguments. In AeroDyn_Driver  these values were set via a 
+   !  driver input file. But in AeroDyn_Interface, that extra input file has been removed and replaced with this subroutine.
    subroutine Interface_Init_Parameters(inputFile,outputfile,timestep,numBlades,hubRad,precone,DvrData,errStat,errMsg )
 
    CHARACTER(*),              intent(in   ) :: InputFile     ! file name for AeroDyn input file
@@ -275,24 +276,19 @@
  
    !-----------------------------
    !< Updates the blade node accelerations, positions, and velocities based on the hub's current rotational vel, acc, and linear acc
-   subroutine Calc_AD_NodeKinematics(hub_linear_acc, hub_angular_acc, u_AD, DvrData)
+   subroutine Calc_AD_NodeKinematics(u_AD, DvrData)
    !.............................
-   real(C_DOUBLE),               dimension(1:3), intent(in   ) :: hub_linear_acc
-   real(C_DOUBLE),               dimension(1:3), intent(in   ) :: hub_angular_acc
    type(AD_InputType),                      intent(inout) :: u_AD
    type(Dvr_SimData),                            intent(inout) :: DvrData       ! Driver data
    
-   real(ReKi)                                  :: rotVel_cross_offset(3) ! used in calculating blade node accelerations and velocities
+   real(ReKi)                                  :: rotVel_cross_offset(3) ! used in calculating blade node velocities
    real(ReKi)                                  :: rotAcc_cross_offset(3) ! used in calculating blade node accelerations
+   real(ReKi)                                  :: rotVel_cross_vel(3)    ! used in calculating blade node accelerations
    real(ReKi)                                  :: orientation(3,3)
    real(ReKi)                                  :: rotateMat(3,3)
    real(ReKi)                                  :: position(3)
    integer(IntKi) :: k ! blade index
    integer(IntKi) :: j ! blade node index
-
-   ! First set the input hub acceleration fields directly
-   u_AD%HubMotion%TranslationAcc(:,1) = hub_linear_acc
-   u_AD%HubMotion%RotationAcc(:,1)    = hub_angular_acc
    
    ! Then calculate the blade node accelerations based on those previous accelerations
    do k=1,DvrData%numBlades
@@ -316,7 +312,8 @@
          rotVel_cross_offset = cross_product( u_AD%HubMotion%RotationVel(:,1), position )
          rotAcc_cross_offset = cross_product( u_AD%HubMotion%RotationAcc(:,1), position )
          u_AD%BladeMotion(k)%TranslationVel( :,j) = rotVel_cross_offset + u_AD%HubMotion%TranslationVel( :,1)
-         u_AD%BladeMotion(k)%TranslationAcc( :,j) = rotAcc_cross_offset + rotVel_cross_offset + u_AD%HubMotion%TranslationAcc( :,1)
+         rotVel_cross_vel = cross_product( u_AD%HubMotion%RotationVel(:,1), u_AD%BladeMotion(k)%TranslationVel(:,j) )
+         u_AD%BladeMotion(k)%TranslationAcc( :,j) = rotAcc_cross_offset + rotVel_cross_vel + u_AD%HubMotion%TranslationAcc( :,1)
 
       end do !j=nnodes
 
@@ -393,33 +390,8 @@
 
    end do !k=numBlades
 
-   ! Blade motions:
-   do k=1,DvrData%numBlades
-      rotateMat = transpose( u%BladeRootMotion(k)%Orientation(  :,:,1) )
-      rotateMat = matmul( rotateMat, u%BladeRootMotion(k)%RefOrientation(  :,:,1) )
-      orientation = transpose(rotateMat)
-
-      rotateMat(1,1) = rotateMat(1,1) - 1.0_ReKi
-      rotateMat(2,2) = rotateMat(2,2) - 1.0_ReKi
-      rotateMat(3,3) = rotateMat(3,3) - 1.0_ReKi
-
-      do j=1,u%BladeMotion(k)%nnodes
-         position = u%BladeMotion(k)%Position(:,j)
-         u%BladeMotion(k)%TranslationDisp(:,j) = matmul( rotateMat, position ) + u%HubMotion%Position(:,1)
-
-         u%BladeMotion(k)%Orientation(  :,:,j) = matmul( u%BladeMotion(k)%RefOrientation(:,:,j), orientation )
-
-         position =  u%BladeMotion(k)%Position(:,j) + u%BladeMotion(k)%TranslationDisp(:,j) &
-            - u%HubMotion%Position(:,1) - u%HubMotion%TranslationDisp(:,1) 
-         
-         rotVel_cross_offset = cross_product( u%HubMotion%RotationVel(:,1), position )
-         rotAcc_cross_offset = cross_product( u%HubMotion%RotationAcc(:,1), position )
-         u%BladeMotion(k)%TranslationVel( :,j) = rotVel_cross_offset + hubVel ! add hub vel because hub can have a linear velocity
-         u%BladeMotion(k)%TranslationAcc( :,j) = rotAcc_cross_offset + rotVel_cross_offset + hubAcc
-
-      end do !j=nnodes
-
-   end do !k=numBlades
+   ! With the hub and blade root fields set, recalculate the blade node kinematics accordingly
+   call Calc_AD_NodeKinematics(u, DvrData)
 
    end subroutine Set_AD_Inputs_Hub
    

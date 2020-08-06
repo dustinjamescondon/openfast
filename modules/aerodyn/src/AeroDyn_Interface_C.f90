@@ -274,7 +274,11 @@
       
       call C_F_POINTER(simInsAddr, v)
       
-      call Calc_AD_NodeKinematics(linearAcc, rotationAcc, v%AD%u(1), v%DvrData)
+      ! Set the hub's acceleration fields
+      v%AD%u(1)%HubMotion%TranslationAcc(:,1) = linearAcc
+      v%AD%u(1)%HubMotion%RotationAcc(:,1) = rotationAcc
+      ! and calculate the blade node accelerations accordingly
+      call Calc_AD_NodeKinematics(v%AD%u(1), v%DvrData)
 
    end subroutine Interface_SetInputs_HubAcceleration
    
