@@ -602,7 +602,7 @@ end if
             
             ! Calculate the added mass contribution in the flapwise direction for the jth node
             ! of the kth blade 
-            m%AddedMass(j,k) = p%CaBlade * p%AirDens * (p%BEMT%chord(j,k) **  2) / 4 * pi
+            m%AddedMass(j,k) = p%CaBlade * p%AirDens * ((p%BEMT%chord(j,k) **  2) / 4) * pi
             
          end do !j=nodes
       end do !k=blades

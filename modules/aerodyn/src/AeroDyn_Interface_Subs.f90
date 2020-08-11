@@ -309,10 +309,12 @@
          position =  u_AD%BladeMotion(k)%Position(:,j) + u_AD%BladeMotion(k)%TranslationDisp(:,j) &
             - u_AD%HubMotion%Position(:,1) - u_AD%HubMotion%TranslationDisp(:,1)
             
+         ! Linear node velocity = Hub angular vel x Node displacement from hub center + Linear hub velocity
          rotVel_cross_offset = cross_product( u_AD%HubMotion%RotationVel(:,1), position )
          rotAcc_cross_offset = cross_product( u_AD%HubMotion%RotationAcc(:,1), position )
          u_AD%BladeMotion(k)%TranslationVel( :,j) = rotVel_cross_offset + u_AD%HubMotion%TranslationVel( :,1)
          rotVel_cross_vel = cross_product( u_AD%HubMotion%RotationVel(:,1), u_AD%BladeMotion(k)%TranslationVel(:,j) )
+         ! Linear node acceleration = Hub angular acceleration x Node offset from hub center + Hub angular velocity x Node linear velocity + Hub linear acceleration
          u_AD%BladeMotion(k)%TranslationAcc( :,j) = rotAcc_cross_offset + rotVel_cross_vel + u_AD%HubMotion%TranslationAcc( :,1)
 
       end do !j=nnodes
